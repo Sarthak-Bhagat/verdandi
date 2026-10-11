@@ -150,3 +150,15 @@ def test_valid_json_that_is_not_a_row_is_skipped():
         fh.write("[]\n5\n")
     assert sessions.record(sess(), ep(), now=1000.0) is True
     assert len(sessions.read()) == 1
+
+
+def test_a_row_carries_its_skips_as_from_to_pairs():
+    s = replace(sess(), skips=((60.0, 150.0), (1250.0, 1340.0)))
+    sessions.record(s, ep(), now=1000.0)
+    assert sessions.read()[0]["skips"] == [[60.0, 150.0], [1250.0, 1340.0]]
+
+
+def test_a_row_with_no_skips_says_so():
+    """An empty list, not a missing field: a reader can tell none from not recorded."""
+    sessions.record(sess(), ep(), now=1000.0)
+    assert sessions.read()[0]["skips"] == []

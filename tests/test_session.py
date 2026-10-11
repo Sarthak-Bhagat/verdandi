@@ -225,3 +225,67 @@ def test_the_default_id_is_random():
     second = taken(acc)
     assert len(first.session) == 32
     assert first.session != second.session
+
+
+def skips_of(events, end: float):
+    acc = Accumulator()
+    feed(acc, opened() + events)
+    acc.finish(end, "lost")
+    return taken(acc).skips
+
+
+def test_a_forward_seek_is_recorded_as_a_skip_from_where_to_where():
+    assert skips_of([*ticks(0.0, 0.0, 11), ("seek", None, 10.5), *ticks(95.0, 11.0, 6)],
+                    16.0) == ((10.0, 95.0),)
+
+
+def test_a_jump_mpv_never_announced_is_a_skip_too():
+    assert skips_of(ticks(0.0, 0.0, 11) + ticks(95.0, 11.0, 6), 16.0) == ((10.0, 95.0),)
+
+
+def test_seeking_back_is_not_a_skip():
+    assert skips_of([*ticks(0.0, 0.0, 31), ("seek", None, 30.5), *ticks(10.0, 31.0, 5)],
+                    36.0) == ()
+
+
+def test_opening_at_the_resume_point_is_not_a_skip():
+    assert skips_of(ticks(80.0, 1.0, 11), 11.0) == ()
+
+
+def test_a_burst_of_taps_is_one_skip():
+    """Five-second taps in quick succession: one skip over the opening, not three."""
+    taps = [("seek", None, 10.2), ("time-pos", 15.0, 10.3), ("seek", None, 10.6),
+            ("time-pos", 20.0, 10.7), ("seek", None, 11.0), ("time-pos", 25.0, 11.1)]
+    assert skips_of(ticks(0.0, 0.0, 11) + taps + ticks(26.0, 12.0, 5), 16.0) == ((10.0, 25.0),)
+
+
+def test_skips_with_watching_between_them_stay_apart():
+    events = [*ticks(0.0, 0.0, 11), ("seek", None, 10.5), *ticks(40.0, 11.0, 6),
+              ("seek", None, 16.5), *ticks(80.0, 17.0, 5)]
+    assert skips_of(events, 21.0) == ((10.0, 40.0), (45.0, 80.0))
+
+
+def test_a_tap_back_ends_a_burst():
+    taps = [("seek", None, 10.2), ("time-pos", 40.0, 10.3), ("seek", None, 10.6),
+            ("time-pos", 5.0, 10.7), ("seek", None, 11.0), ("time-pos", 15.0, 11.1)]
+    assert skips_of(ticks(0.0, 0.0, 11) + taps + ticks(16.0, 12.0, 3),
+                    14.0) == ((10.0, 40.0), (5.0, 15.0))
+
+
+def test_a_seek_made_while_paused_is_a_skip():
+    events = [*ticks(0.0, 0.0, 11), ("pause", True, 10.0), ("seek", None, 20.0),
+              ("time-pos", 90.0, 20.1), ("pause", False, 30.0), *ticks(90.0, 30.0, 5)]
+    assert skips_of(events, 35.0) == ((10.0, 90.0),)
+
+
+def test_an_announced_seek_is_a_skip_even_where_the_clock_would_allow_the_advance():
+    """Whatever content does not count as watched, skips account for: no gap between them."""
+    assert skips_of([*ticks(0.0, 0.0, 11), ("seek", None, 10.5), ("time-pos", 14.0, 13.0),
+                     *ticks(15.0, 14.0, 3)], 17.0) == ((10.0, 14.0),)
+
+
+def test_a_jump_while_paused_is_a_skip_even_unannounced():
+    """The backup rule while paused: no clock time is playing time, so any jump is one."""
+    events = [*ticks(0.0, 0.0, 11), ("pause", True, 10.0), ("time-pos", 90.0, 600.0),
+              ("pause", False, 610.0), *ticks(90.0, 610.0, 5)]
+    assert skips_of(events, 615.0) == ((10.0, 90.0),)

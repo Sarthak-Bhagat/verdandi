@@ -12,6 +12,12 @@ position advanced between two reports, unpaused, with no seek in between. Speed
 does not change it -- an episode watched whole at 2x is a whole episode -- and
 `wall_seconds`, the real time spent unpaused, is the number speed does change.
 
+**Skips are facts, not judgements.** Every forward jump is recorded as `[from,
+to]`, announced by mpv or not, paused or playing. A burst of taps -- jumps under
+two seconds apart with under a second played between -- is one skip, from where
+the first left to where the last landed. Which skip was an opening or an ending
+is the tracker's call (urd), so changing that rule needs no release here.
+
 Pure: no socket, no clock, no randomness. `now` is supplied by the caller, and
 so is the source of session ids, so tests drive both directly.
 """
@@ -25,6 +31,11 @@ from dataclasses import dataclass
 # position several times a second, so an honest advance overshoots by a frame
 # or two; a second of slack covers that and is still far below any real skip.
 _SEEK_SLACK_S = 1.0
+
+# Taps on a seek key arrive this close together, with this little played between
+# them, and are one skip. Skipping an opening is three to five taps in a second or two.
+_BURST_GAP_S = 2.0
+_BURST_PLAYED_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -41,6 +52,8 @@ class Session:
     when it sent one, and otherwise the caller's: `signal` when the watcher was
     told to stop, `lost` when mpv went away without a word. None means the
     session was closed by the next file with no `end-file` before it.
+
+    `skips` is every forward jump, `(from, to)` in media seconds, in order.
     """
 
     session: str
@@ -56,6 +69,7 @@ class Session:
     speed_last: float | None
     speed_max: float | None
     end_reason: str | None
+    skips: tuple[tuple[float, float], ...] = ()
 
 
 def _random_id() -> str:
@@ -115,7 +129,7 @@ class Accumulator:
         elif name == "time-pos" and isinstance(data, int | float):
             self._position(float(data), now)
         elif name == "seek":
-            self._seeked = True
+            self._seeked = self._jumped = True
         elif name == "end-file":
             # Sent before the path changes, so this is still the file it names.
             self._tick(now)
@@ -145,6 +159,7 @@ class Accumulator:
         self._samples += 1
         if self._first_pos is None:
             self._first_pos = pos
+        self._jump(pos, now)
         # Monotonic on purpose. Watching to 90% and rewinding to rewatch a
         # scene is still a 90% watch, so a later, lower position never
         # overwrites a higher earlier one.
@@ -163,6 +178,32 @@ class Accumulator:
                 self._content += advance
         self._ref = (pos, now)
         self._seeked = False
+
+    def _jump(self, pos: float, now: float) -> None:
+        """Record a forward jump since the last position report as a skip, merging a burst.
+
+        Separate from the content reference on purpose: that one is dropped on
+        pause, and a seek made while paused is still a skip.
+        """
+        last, self._at = self._at, (pos, now)
+        jumped, self._jumped = self._jumped, False
+        if last is None:
+            return
+        last_pos, last_now = last
+        playing = not self._paused and not self._ended
+        allowed = (now - last_now) * (self._speed or 1.0) if playing else 0.0
+        advance = pos - last_pos
+        if advance < -_SEEK_SLACK_S:
+            self._burst_at = None       # a tap back ends a burst
+            return
+        if not (jumped or advance > allowed + _SEEK_SLACK_S) or advance <= _SEEK_SLACK_S:
+            return
+        if (self._skips and self._burst_at is not None and now - self._burst_at < _BURST_GAP_S
+                and last_pos - self._skips[-1][1] < _BURST_PLAYED_S):
+            self._skips[-1] = (self._skips[-1][0], pos)
+        else:
+            self._skips.append((last_pos, pos))
+        self._burst_at = now
 
     def _tick(self, now: float) -> None:
         """Add the real time since the last tick to `wall_seconds`, if it was spent playing."""
@@ -188,6 +229,10 @@ class Accumulator:
         self._ref: tuple[float, float] | None = None
         self._seeked = False
         self._ended = False
+        self._at: tuple[float, float] | None = None
+        self._jumped = False
+        self._skips: list[tuple[float, float]] = []
+        self._burst_at: float | None = None
         self._end_reason: str | None = None
         self._speed_last: float | None = self._speed
         self._speed_max: float | None = self._speed
@@ -211,5 +256,6 @@ class Accumulator:
                              first_pos=self._first_pos, max_pos=self._max_pos,
                              samples=self._samples, content_seconds=round(self._content, 3),
                              wall_seconds=round(self._wall, 3), speed_last=self._speed_last,
-                             speed_max=self._speed_max, end_reason=self._end_reason)
+                             speed_max=self._speed_max, end_reason=self._end_reason,
+                             skips=tuple((round(a, 3), round(b, 3)) for a, b in self._skips))
         self._path = None

@@ -10,7 +10,9 @@ that is how far playback reached, and a jump to the credits reaches the end. A
 reported them -- a missing number is a gap, a guessed one is a lie.
 
 Rows written before 2026-10-11 lack `session`, `client`, `end_reason` and the
-time and speed fields; a reader treats each as missing, never as zero.
+time and speed fields; a reader treats each as missing, never as zero. Rows from
+before skip recording lack `skips`, which is not the same as `[]`: an empty list
+means no forward jump happened, a missing field means none were looked for.
 
 **Nothing is discarded for being unidentified.** A session the resolver could
 not name is still a row, with empty `ids` and confidence `"none"`, so the watch
@@ -90,6 +92,7 @@ class Row(TypedDict):
     speed_last: float | None
     speed_max: float | None
     samples: int
+    skips: list[list[float]]
     kind: Kind
     ids: Ids
     season: int | None
@@ -200,6 +203,7 @@ def row(session: Session, resolution: Resolution, now: float) -> Row:
         "speed_last": session.speed_last,
         "speed_max": session.speed_max,
         "samples": session.samples,
+        "skips": [[a, b] for a, b in session.skips],
         "kind": resolution.kind,
         "ids": resolution.ids,
         "season": resolution.season,
