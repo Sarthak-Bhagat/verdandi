@@ -5,7 +5,7 @@ import json
 import pytest
 
 from scrobd import aliases, cli, queue
-from scrobd.paths import data_dir
+from scrobd.paths import data_dir, state_dir
 from scrobd.resolution import Resolution
 
 
@@ -119,3 +119,19 @@ def test_a_wrong_shape_alias_file_does_not_drop_the_file_on_the_floor():
     rc = cli.main(["resolve", "/m/Mystery Show/Season 01/x - S01E01 - t.mkv"])
     assert rc == 1
     assert queue.count() == 1
+
+
+def test_compare_prints_the_window_and_fails_on_an_unexplained_difference(capsys):
+    (state_dir() / "trakt-scrobbler.jsonl").write_text(json.dumps(
+        {"at": "2026-10-12T21:00:00Z", "t": 1791838800.0, "kind": "scrobbled", "action": "stop",
+         "title": "Some Show", "season": 2, "episode": 5, "progress": 93.5}) + "\n")
+    assert cli.main(["compare", "1"]) == 1
+    out = capsys.readouterr().out
+    assert "window 1: 2026-10-11 → 2026-11-10" in out
+    assert "only trakt-scrobbler" in out
+    assert "Some Show S02E05" in out
+
+
+def test_compare_is_clean_with_nothing_to_compare(capsys):
+    assert cli.main(["compare", "1"]) == 0
+    assert "unexplained: 0" in capsys.readouterr().out

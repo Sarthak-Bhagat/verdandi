@@ -5,6 +5,7 @@ scrobd review                               what could I not identify?
 scrobd review --answer <folder> --tvdb N    teach it, once, for the whole series
 scrobd index --from-json <series> <movies>  rebuild the local index
 scrobd watch [--socket PATH]                record a session per library file mpv plays
+scrobd compare [N]                          window N of the parallel run against trakt-scrobbler
 """
 
 import argparse
@@ -19,7 +20,7 @@ from pathlib import Path
 from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Self
 
-from . import _log, aliases, config, index, queue, sessions
+from . import _log, aliases, config, index, queue, sessions, traktlog
 from .mpv import Change, MpvSocket, MpvUnavailableError
 from .resolution import UNKNOWN, Ids, Resolution
 from .resolver import resolve as resolve_one
@@ -368,6 +369,9 @@ def _cmd_watch(socket_path: str | None) -> int:
         return 1
     # Once per watch: one small file per mpv launched.
     library = config.library_roots()
+    # Top up the copy of trakt-scrobbler's record before its log rotates away.
+    # Never raises: a log it cannot read costs the copy, not this watch.
+    traktlog.sync()
     if library is None:
         print(f"no library is configured in {config.path()}, so every local file "
               "is being recorded", file=sys.stderr)
@@ -412,6 +416,39 @@ def _follow(mpv: MpvSocket, acc: Accumulator, recorder: _Recorder,
     recorder.record(acc.take())
 
 
+def _describe_diff(d: traktlog.Difference) -> str:
+    se = ""
+    if d.season is not None and d.episode is not None:
+        se = f" S{d.season:02d}E{d.episode:02d}"
+    when = time.strftime("%Y-%m-%d %H:%M", time.localtime(d.at))
+    reason = f"  -- {d.reason}" if d.reason else ""
+    return f"  {d.side:<20}  {when}  {d.title}{se}{reason}"
+
+
+def _cmd_compare(n: int | None) -> int:
+    """Line up one window of the parallel run; exit 1 if anything is unexplained."""
+    traktlog.sync()
+    now = time.time()
+    n = n or traktlog.current_window(now)
+    start, end = traktlog.window(n)
+    last_day = time.strftime("%Y-%m-%d", time.localtime(end - 1))
+    state = ""
+    if now < start:
+        state = " (not started)"
+    elif now < end:
+        state = " (in progress)"
+    print(f"window {n}: {time.strftime('%Y-%m-%d', time.localtime(start))} → {last_day}{state}")
+    c = traktlog.compare(n, sessions.read(), traktlog.read())
+    print(f"matched: {len(c.matched)}")
+    print(f"explained: {len(c.explained)}")
+    for d in c.explained:
+        print(_describe_diff(d))
+    print(f"unexplained: {len(c.unexplained)}")
+    for d in c.unexplained:
+        print(_describe_diff(d))
+    return 1 if c.unexplained else 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="scrobd", description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -427,6 +464,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     pi = sub.add_parser("index")
     pi.add_argument("--from-json", nargs=2, metavar=("SERIES", "MOVIES"), required=True)
+
+    pc = sub.add_parser("compare")
+    pc.add_argument("window", nargs="?", type=int,
+                    help="rolling window from 2026-10-11, 1-based (default: the current one)")
 
     pw = sub.add_parser("watch")
     pw.add_argument("--socket", metavar="PATH",
@@ -446,6 +487,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "index":
         s, m = a.from_json
         return _cmd_index(s, m)
+    if a.cmd == "compare":
+        return _cmd_compare(a.window)
     if a.cmd == "watch":
         return _cmd_watch(a.socket)
     return 1

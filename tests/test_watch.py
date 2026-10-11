@@ -568,3 +568,14 @@ def test_sigterm_ends_a_separate_watcher_asleep_in_a_real_read(tmp_path):
                 watcher.kill()              # a failing test leaves no watcher behind
     assert (watcher.returncode, err) == (0, b"")
     assert [(r["episode"], r["max_pos"]) for r in sessions.read()] == [(10, 900.0)]
+
+
+def test_a_watch_starting_copies_trakt_scrobblers_new_scrobbles(tmp_path):
+    """Its log rotates within weeks; each watch tops up the copy, so a month survives."""
+    log = tmp_path / "d" / "trakt-scrobbler" / "trakt_scrobbler.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("2026-10-12 21:00:00,1 - INFO - Thread-1 - scrobbler - "
+                   "Scrobble stop successful for Some Show S02E05 at 93.50%\n")
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    copied = (state_dir() / "trakt-scrobbler.jsonl").read_text().splitlines()
+    assert [json.loads(x)["episode"] for x in copied] == [5]
