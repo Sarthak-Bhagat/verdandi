@@ -62,15 +62,42 @@ def test_yields_property_changes_in_order(mpv_at):
     assert got == [("path", "/m/a.mkv"), ("duration", 1400.0), ("time-pos", 12.5)]
 
 
-def test_ignores_non_property_events(mpv_at):
+def test_ignores_events_the_session_does_not_use(mpv_at):
     path = mpv_at([
-        {"event": "seek"},
+        {"event": "start-file"},
+        {"event": "playback-restart"},
         {"request_id": 0, "error": "success"},
         {"event": "property-change", "name": "pause", "data": True},
     ])
     with MpvSocket(str(path)) as m:
         got = [e["name"] for e in m.events()]
     assert got == ["pause"]
+
+
+def test_passes_seek_and_end_file_through_with_the_reason(mpv_at):
+    """A seek separates watching from skipping; end-file says how the file ended."""
+    path = mpv_at([
+        {"event": "seek"},
+        {"event": "end-file", "reason": "eof", "playlist_entry_id": 1},
+        {"event": "end-file"},
+    ])
+    with MpvSocket(str(path)) as m:
+        got = [(e["name"], e["data"]) for e in m.events()]
+    assert got == [("seek", None), ("end-file", "eof"), ("end-file", None)]
+
+
+def test_subscribes_to_speed(tmp_path):
+    """Content time is checked against what the clock and the speed allow."""
+    path = tmp_path / "mpvsocket"
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(str(path))
+    srv.listen(1)
+    with MpvSocket(str(path)):
+        conn, _ = srv.accept()
+        with conn:
+            sent = [json.loads(line) for line in conn.recv(4096).splitlines()]
+    srv.close()
+    assert ["observe_property", 6, "speed"] in [c["command"] for c in sent]
 
 
 def test_a_socket_with_nothing_listening_raises_loudly(tmp_path):

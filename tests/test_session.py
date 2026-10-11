@@ -103,3 +103,125 @@ def test_samples_counts_position_reports():
                ("time-pos", 2.0, 2.0), ("time-pos", 3.0, 3.0)])
     acc.finish(4.0)
     assert taken(acc).samples == 3
+
+
+def ticks(pos: float, at: float, n: int, *, pos_step: float = 1.0, wall_step: float = 1.0):
+    """Return *n* position reports, *pos_step* of media and *wall_step* seconds of clock apart."""
+    return [("time-pos", pos + i * pos_step, at + i * wall_step) for i in range(n)]
+
+
+def opened(speed: float = 1.0):
+    """Return what mpv sends as the watcher subscribes: file, length, unpaused, speed."""
+    return [("path", "/m/a.mkv", 0.0), ("duration", 100.0, 0.0),
+            ("pause", False, 0.0), ("speed", speed, 0.0)]
+
+
+def test_a_full_watch_at_2x_counts_every_second_of_content_and_half_the_wall():
+    """Speed changes how long it took, never how much was watched."""
+    acc = Accumulator()
+    feed(acc, opened(speed=2.0) + ticks(0.0, 0.0, 51, pos_step=2.0))
+    acc.finish(50.0, "lost")
+    s = taken(acc)
+    assert s.content_seconds == 100.0
+    assert s.wall_seconds == 50.0
+    assert (s.speed_last, s.speed_max) == (2.0, 2.0)
+
+
+def test_skipping_ahead_adds_no_content():
+    """Jumping to the credits reaches the end. It does not watch the episode."""
+    acc = Accumulator()
+    feed(acc, opened() + ticks(0.0, 0.0, 11) + [("seek", None, 10.5)] + ticks(95.0, 11.0, 6))
+    acc.finish(16.0, "lost")
+    s = taken(acc)
+    assert s.max_pos == 100.0
+    assert s.content_seconds == 15.0
+
+
+def test_a_jump_mpv_never_announced_is_still_a_seek():
+    """The backup rule: more media than the clock and the speed allow is a skip, not watching."""
+    acc = Accumulator()
+    feed(acc, opened() + ticks(0.0, 0.0, 11) + ticks(95.0, 11.0, 6))
+    acc.finish(16.0, "lost")
+    assert taken(acc).content_seconds == 15.0
+
+
+def test_an_hour_paused_counts_as_neither_content_nor_wall():
+    acc = Accumulator()
+    feed(acc, opened() + ticks(0.0, 0.0, 11) + [("pause", True, 10.0), ("pause", False, 3610.0)]
+         + ticks(10.0, 3610.0, 11))
+    acc.finish(3620.0, "lost")
+    s = taken(acc)
+    assert s.content_seconds == 20.0
+    assert s.wall_seconds == 20.0
+
+
+def test_seeking_back_counts_the_rewatched_part_again():
+    """Content is media played through. A scene watched twice was played twice."""
+    acc = Accumulator()
+    feed(acc, opened() + ticks(0.0, 0.0, 31) + [("seek", None, 30.5)] + ticks(10.0, 31.0, 21))
+    acc.finish(51.0, "lost")
+    assert taken(acc).content_seconds == 50.0
+
+
+def test_a_resumed_play_counts_from_where_it_began():
+    """Opening at the resume point is not 1300 seconds of watching."""
+    acc = Accumulator()
+    feed(acc, opened() + ticks(80.0, 1.0, 11))
+    acc.finish(11.0, "lost")
+    s = taken(acc)
+    assert s.first_pos == 80.0
+    assert s.content_seconds == 10.0
+
+
+def test_speed_is_recorded_as_the_last_and_the_highest():
+    acc = Accumulator()
+    feed(acc, [*opened(), ("speed", 2.5, 5.0), ("speed", 1.5, 10.0)])
+    acc.finish(11.0, "lost")
+    s = taken(acc)
+    assert (s.speed_last, s.speed_max) == (1.5, 2.5)
+
+
+def test_time_after_the_file_ended_counts_for_nothing():
+    """Mpv idling after the last file keeps the session open; that wait is not watching."""
+    acc = Accumulator()
+    feed(acc, opened() + ticks(0.0, 0.0, 11) + [("end-file", "eof", 10.0), ("path", None, 10.0)])
+    acc.finish(900.0, "lost")
+    s = taken(acc)
+    assert s.wall_seconds == 10.0
+    assert s.end_reason == "eof"
+
+
+def test_the_end_reason_is_mpvs_when_it_gave_one():
+    """Mpv sends end-file, with its reason, before the path changes to the next file."""
+    acc = Accumulator()
+    feed(acc, [*opened(), ("end-file", "eof", 5.0), ("path", None, 5.0),
+               ("path", "/m/b.mkv", 5.1)])
+    first = taken(acc)
+    feed(acc, [("end-file", "quit", 9.0)])
+    acc.finish(9.1, "lost")
+    assert (first.end_reason, taken(acc).end_reason) == ("eof", "quit")
+
+
+def test_the_watchers_own_reason_only_fills_a_gap():
+    acc = Accumulator()
+    feed(acc, opened())
+    acc.finish(5.0, "signal")
+    assert taken(acc).end_reason == "signal"
+
+
+def test_every_session_gets_its_own_id():
+    acc = Accumulator(new_id=iter(["one", "two"]).__next__)
+    feed(acc, [*opened(), ("path", "/m/b.mkv", 5.0)])
+    first = taken(acc)
+    acc.finish(9.0, "lost")
+    assert (first.session, taken(acc).session) == ("one", "two")
+
+
+def test_the_default_id_is_random():
+    acc = Accumulator()
+    feed(acc, [*opened(), ("path", "/m/b.mkv", 5.0)])
+    first = taken(acc)
+    acc.finish(9.0, "lost")
+    second = taken(acc)
+    assert len(first.session) == 32
+    assert first.session != second.session

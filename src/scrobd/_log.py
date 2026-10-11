@@ -1,9 +1,10 @@
 """A post-mortem trail of what scrobd decided, one JSON object per line.
 
-TEMPORARY. Added 2026-09-21 to run about a week, so that a wrong scrobble can be
-reconstructed afterwards rather than re-enacted. `docs/superpowers/logging.md`
-says how to read it and when to delete it; `SCROBD_LOG=0` turns it off with no
-code change.
+Added 2026-09-21 so that a wrong scrobble can be reconstructed afterwards
+rather than re-enacted. It was meant to run a week; on 2026-10-10 it was kept
+with no expiry, because its `out_of_scope` lines are the only trace of a file
+played outside the configured library -- a root the config misses shows up
+nowhere else. `SCROBD_LOG=0` turns it off with no code change.
 
 **Decisions, never credentials.** Every field written here is something the tool
 worked out -- a path, a tier, a library id, a count. Nothing that authenticates
@@ -38,16 +39,15 @@ from .paths import state_dir
 _FILE = "scrobd.jsonl"
 _OFF = "SCROBD_LOG"         # "0" disables; anything else, including unset, leaves it on
 
-# Dates the artefact carries about itself, so the file explains its own expiry
-# to whoever finds it without this repo open.
+# The date the artefact carries about itself, so the file explains itself to
+# whoever finds it without this repo open.
 _ADDED = "2026-09-21"
-_REVIEW_AFTER = "2026-10-09"
 
 # 5 MiB. A resolve line with a full library path runs ~500 bytes, and the
 # heaviest plausible week -- 50 files a day, two events each -- is ~350 KB. So
-# this is roughly fourteen weeks of that, and cannot be reached by watching
-# things: it means a caller is looping, or that this was never turned off. A
-# threshold that never fires in normal use is one worth interrupting for.
+# this is roughly fourteen weeks of that. Measured in real use, a week was
+# 47 KB, so normal watching reaches it in about two years: the warning is then
+# the prompt to move the file aside, and sooner it means a caller is looping.
 _WARN_BYTES = 5 * 1024 * 1024
 
 # Paths already warned about. A set mutated in place, not a rebound module
@@ -68,15 +68,13 @@ def _now() -> str:
 
 
 def _header() -> dict[str, object]:
-    """Return the first line of a new log file: what this is and when it expires."""
+    """Return the first line of a new log file: what this file is and how to turn it off."""
     return {
         "ts": _now(),
         "event": "log_started",
         "added": _ADDED,
-        "review_after": _REVIEW_AFTER,
-        "temporary": True,
-        "note": (f"post-mortem logging, added {_ADDED}, meant to run about a week; "
-                 f"revisit after {_REVIEW_AFTER}. SCROBD_LOG=0 turns it off."),
+        "note": (f"post-mortem log of what scrobd decided, added {_ADDED}; kept with no "
+                 "expiry. SCROBD_LOG=0 turns it off."),
     }
 
 
@@ -91,9 +89,8 @@ def _warn_if_large(path: Path) -> None:
             return
         _warned.add(key)
         sys.stderr.write(
-            f"scrobd: {path} has reached {size / (1024 * 1024):.0f} MB -- post-mortem "
-            f"logging was meant to stop after {_REVIEW_AFTER}; "
-            f"set SCROBD_LOG=0 to turn it off\n")
+            f"scrobd: {path} has reached {size / (1024 * 1024):.0f} MB -- move it aside "
+            f"to start a fresh one, or set SCROBD_LOG=0 to turn it off\n")
     except (OSError, ValueError):
         return          # a stat that fails or a closed stderr is not worth a traceback
 

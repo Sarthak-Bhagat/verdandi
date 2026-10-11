@@ -312,7 +312,21 @@ def test_ctrl_c_records_the_session_being_watched(tmp_path, monkeypatch):
     except KeyboardInterrupt:
         pytest.fail("Ctrl-C escaped `watch` instead of ending it")
     assert rc == 0
-    assert [r["max_pos"] for r in sessions.read()] == [700.0]
+    assert [(r["max_pos"], r["end_reason"]) for r in sessions.read()] == [(700.0, "signal")]
+
+
+def test_mpvs_own_end_reason_is_recorded(tmp_path):
+    rc = run_watch(tmp_path, [*play(SHOW.format(4), 700.0),
+                              {"event": "end-file", "reason": "quit"}])
+    assert rc == 0
+    assert [r["end_reason"] for r in sessions.read()] == ["quit"]
+
+
+def test_mpv_gone_without_a_reason_is_recorded_as_lost(tmp_path):
+    """The socket closed with no end-file before it: mpv crashed or was killed."""
+    rc = run_watch(tmp_path, play(SHOW.format(4), 700.0))
+    assert rc == 0
+    assert [r["end_reason"] for r in sessions.read()] == ["lost"]
 
 
 def test_every_session_is_logged_with_its_row_and_whether_it_was_written(tmp_path, monkeypatch):

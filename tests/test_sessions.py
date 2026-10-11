@@ -1,5 +1,6 @@
 """The append-only session log and its measured dedupe window."""
 
+import socket
 from dataclasses import replace
 
 import pytest
@@ -22,9 +23,24 @@ def ep(n=1):
 
 def sess(path="/m/a.mkv", max_pos=1300.0, duration=1400.0, start=0.0, end=1400.0):
     # A session with no position reported has no first position either.
-    return Session(path=path, started_at=start, ended_at=end, duration=duration,
-                   first_pos=0.0 if max_pos is not None else None,
-                   max_pos=max_pos, samples=10)
+    return Session(session=f"id-{path}-{start}", path=path, started_at=start, ended_at=end,
+                   duration=duration, first_pos=0.0 if max_pos is not None else None,
+                   max_pos=max_pos, samples=10, content_seconds=max_pos or 0.0,
+                   wall_seconds=max_pos or 0.0, speed_last=1.0, speed_max=1.0,
+                   end_reason="eof")
+
+
+def test_a_row_carries_how_it_was_played_and_where():
+    """The fields the watched rule and ingest need, written as the accumulator measured them."""
+    s = replace(sess(), content_seconds=1180.5, wall_seconds=590.25, speed_last=2.0,
+                speed_max=2.5, end_reason="quit")
+    sessions.record(s, ep(), now=1000.0)
+    r = sessions.read()[0]
+    assert r["session"] == s.session
+    assert (r["content_seconds"], r["wall_seconds"]) == (1180.5, 590.25)
+    assert (r["speed_last"], r["speed_max"]) == (2.0, 2.5)
+    assert r["end_reason"] == "quit"
+    assert r["client"] == socket.gethostname()
 
 
 def test_a_session_is_appended():

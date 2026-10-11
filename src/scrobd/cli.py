@@ -20,7 +20,7 @@ from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Self
 
 from . import _log, aliases, config, index, queue, sessions
-from .mpv import MpvSocket, MpvUnavailableError, PropertyChange
+from .mpv import Change, MpvSocket, MpvUnavailableError
 from .resolution import UNKNOWN, Ids, Resolution
 from .resolver import resolve as resolve_one
 from .session import Accumulator, Session
@@ -337,7 +337,7 @@ class _Interrupts:
             self._waiting = False
             raise KeyboardInterrupt
 
-    def next_event(self, events: Iterator[PropertyChange]) -> PropertyChange | None:
+    def next_event(self, events: Iterator[Change]) -> Change | None:
         """Return mpv's next event, or None once mpv closes the socket or a signal arrives."""
         try:
             # `_waiting` is set before `_requested` is read, and the handler
@@ -349,8 +349,14 @@ class _Interrupts:
             self._waiting = False
         except KeyboardInterrupt:
             self._waiting = False   # already so if the handler raised; not if it came another way
+            self._requested = True  # however it arrived, the watch was told to stop
             return None
         return event
+
+    @property
+    def requested(self) -> bool:
+        """Whether the watch was told to stop, rather than mpv closing the socket."""
+        return self._requested
 
 
 def _cmd_watch(socket_path: str | None) -> int:
@@ -400,7 +406,9 @@ def _follow(mpv: MpvSocket, acc: Accumulator, recorder: _Recorder,
     # The file still open when the watch ended. mpv closing the socket,
     # Ctrl-C, SIGTERM and SIGHUP all land here, and losing the session being
     # watched to any of them is the silent loss this tool exists to prevent.
-    acc.finish(time.time())
+    # mpv sends end-file, with its reason, before it closes the socket on a
+    # normal quit; these two reasons only fill the gap when it sent none.
+    acc.finish(time.time(), "signal" if interrupts.requested else "lost")
     recorder.record(acc.take())
 
 

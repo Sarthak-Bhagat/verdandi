@@ -18,22 +18,26 @@ from pathlib import Path
 from types import TracebackType
 from typing import Self, TypedDict
 
-WATCHED_PROPERTIES = ("path", "duration", "time-pos", "pause", "eof-reached")
+WATCHED_PROPERTIES = ("path", "duration", "time-pos", "pause", "eof-reached", "speed")
 
 
-class PropertyChange(TypedDict):
-    """One observed property's new value, as `events` yields it.
+class Change(TypedDict):
+    """One thing the session needs to hear about, as `events` yields it.
 
-    `data` is None when mpv sent none: a property it cannot report yet -- no
-    duration before a file has loaded -- arrives with no `data` key at all.
+    Either an observed property's new value, keyed by the property's name --
+    `data` is None when mpv sent none, as for a duration before a file has
+    loaded -- or one of two events, keyed by the event's name: `seek`, with no
+    data, and `end-file`, with mpv's reason for it (`eof`, `stop`, `quit`,
+    `error`, `redirect`). mpv has no properties by either name, so the two
+    cannot collide.
     """
 
     name: str
     data: object
 
 
-def _parse(line: bytes) -> PropertyChange | None:
-    """Return *line* as a property change, or None for anything else mpv sent.
+def _decode(line: bytes) -> object:
+    """Return one line of mpv's output as JSON, or None if it is blank or not JSON.
 
     mpv passes a filename's bytes through as they are, and a filename need not
     be UTF-8. Decoding with "replace" keeps the line -- and so the path change
@@ -45,14 +49,25 @@ def _parse(line: bytes) -> PropertyChange | None:
     if not line.strip():
         return None
     try:
-        msg = json.loads(line.decode("utf-8", "replace"))
+        return json.loads(line.decode("utf-8", "replace"))
     except json.JSONDecodeError:
         return None                                   # never let one bad line end the stream
+
+
+def _parse(line: bytes) -> Change | None:
+    """Return *line* as a change the session needs, or None for anything else mpv sent."""
+    msg = _decode(line)
     # Valid JSON need not be an object: `[]` parses, then has no `.get`.
-    if not (isinstance(msg, dict) and msg.get("event") == "property-change"):
+    if not isinstance(msg, dict):
         return None
-    name = msg.get("name")
-    return PropertyChange(name=name, data=msg.get("data")) if isinstance(name, str) else None
+    match msg.get("event"):
+        case "seek":
+            return Change(name="seek", data=None)
+        case "end-file":
+            return Change(name="end-file", data=msg.get("reason"))
+        case "property-change" if isinstance(name := msg.get("name"), str):
+            return Change(name=name, data=msg.get("data"))
+    return None
 
 
 class MpvUnavailableError(Exception):
@@ -118,8 +133,8 @@ class MpvSocket:
             msg = f"{self.path} closed while subscribing ({exc}) -- did mpv just exit?"
             raise MpvUnavailableError(msg) from exc
 
-    def events(self) -> Iterator[PropertyChange]:
-        """Yield property-change events until mpv closes the socket."""
+    def events(self) -> Iterator[Change]:
+        """Yield what the session needs from mpv, in order, until mpv closes the socket."""
         if self._sock is None:
             self.connect()
         sock = self._sock

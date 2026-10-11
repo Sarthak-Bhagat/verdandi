@@ -2,11 +2,15 @@
 
 **Append-only.** A row is written once and never rewritten, which is why there
 is no `watched` field: whether a session counts as watched is derived at read
-time from `max_pos / duration`, so changing the threshold later reinterprets
-history instead of requiring it to be edited. A 30% abandon is a row like any
-other. No sink can hold it; this log can. `duration`, `first_pos` and `max_pos`
-are written as `null` when mpv never reported them -- a missing number is a
-gap, a guessed one is a lie.
+time from `content_seconds / duration`, so changing the threshold later
+reinterprets history instead of requiring it to be edited. Not from `max_pos`:
+that is how far playback reached, and a jump to the credits reaches the end. A
+30% abandon is a row like any other. No sink can hold it; this log can.
+`duration`, `first_pos` and `max_pos` are written as `null` when mpv never
+reported them -- a missing number is a gap, a guessed one is a lie.
+
+Rows written before 2026-10-11 lack `session`, `client`, `end_reason` and the
+time and speed fields; a reader treats each as missing, never as zero.
 
 **Nothing is discarded for being unidentified.** A session the resolver could
 not name is still a row, with empty `ids` and confidence `"none"`, so the watch
@@ -42,6 +46,7 @@ window directly instead of sleeping.
 """
 
 import json
+import socket
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,6 +61,9 @@ from .session import Session
 # them, and 47% of apparent rewatches are one episode logged twice inside a day.
 DEDUPE_WINDOW_S = 24 * 3600
 
+# The machine that played it. One today; the field is there for the second.
+_CLIENT = socket.gethostname()
+
 # Whole seconds and a `Z`, the spelling `_log` uses and `jq`'s `fromdateiso8601`
 # parses. Dropping the fraction moves a row's time by under a second, which a
 # 24-hour window cannot notice, and the file's own line order keeps sequence.
@@ -68,12 +76,19 @@ class Row(TypedDict):
     """One line of the log, as `row` builds it. Rows read back are not assumed to be one."""
 
     ts: str
+    session: str
+    client: str
     path: str
     started_at: float
     ended_at: float
+    end_reason: str | None
     duration: float | None
     first_pos: float | None
     max_pos: float | None
+    content_seconds: float
+    wall_seconds: float
+    speed_last: float | None
+    speed_max: float | None
     samples: int
     kind: Kind
     ids: Ids
@@ -171,12 +186,19 @@ def row(session: Session, resolution: Resolution, now: float) -> Row:
     """
     return {
         "ts": datetime.fromtimestamp(now, UTC).strftime(_TS_FORMAT),
+        "session": session.session,
+        "client": _CLIENT,
         "path": session.path,
         "started_at": session.started_at,
         "ended_at": session.ended_at,
+        "end_reason": session.end_reason,
         "duration": session.duration,
         "first_pos": session.first_pos,
         "max_pos": session.max_pos,
+        "content_seconds": session.content_seconds,
+        "wall_seconds": session.wall_seconds,
+        "speed_last": session.speed_last,
+        "speed_max": session.speed_max,
         "samples": session.samples,
         "kind": resolution.kind,
         "ids": resolution.ids,

@@ -131,7 +131,7 @@ def test_index_rebuilt_records_the_counts(tmp_path):
     assert e["movies"] == 1
 
 
-# --- the header, written once, carrying its own expiry ---
+# --- the header, written once, saying what the file is ---
 
 
 def test_a_new_file_opens_with_a_dated_header():
@@ -139,8 +139,9 @@ def test_a_new_file_opens_with_a_dated_header():
     first = json.loads(_lines()[0])
     assert first["event"] == "log_started"
     assert first["added"] == "2026-09-21"
-    assert first["review_after"] == "2026-10-09"
-    assert first["temporary"] is True
+    # Kept with no expiry, decided 2026-10-10: a header promising one would be a lie.
+    assert "review_after" not in first
+    assert "temporary" not in first
     assert "SCROBD_LOG=0" in first["note"]
 
 
@@ -200,12 +201,16 @@ def test_a_failed_log_does_not_stop_a_file_reaching_the_queue(monkeypatch):
     assert queue.count() == 1
 
 
-def test_a_full_disk_loses_the_line_not_the_run(monkeypatch):
+def test_a_full_disk_loses_the_line_not_the_run(monkeypatch, tmp_path):
     def boom(*_a, **_k):
         raise OSError(28, "No space left on device")
-    monkeypatch.setattr(Path, "open", boom)
-    _log.event("resolve", path=TAGGED)      # must not raise
-    monkeypatch.undo()
+    # Scoped, not `monkeypatch.undo()`: that also undid the fixture's XDG
+    # redirect, so the assertion below read the user's real log and passed only
+    # while that log happened to hold no `resolve` line.
+    with monkeypatch.context() as m:
+        m.setattr(Path, "open", boom)
+        _log.event("resolve", path=TAGGED)      # must not raise
+    assert _file().is_relative_to(tmp_path)
     assert _events("resolve") == []
 
 
