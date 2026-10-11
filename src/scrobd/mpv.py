@@ -16,9 +16,43 @@ import socket
 from collections.abc import Iterator
 from pathlib import Path
 from types import TracebackType
-from typing import Self
+from typing import Self, TypedDict
 
 WATCHED_PROPERTIES = ("path", "duration", "time-pos", "pause", "eof-reached")
+
+
+class PropertyChange(TypedDict):
+    """One observed property's new value, as `events` yields it.
+
+    `data` is None when mpv sent none: a property it cannot report yet -- no
+    duration before a file has loaded -- arrives with no `data` key at all.
+    """
+
+    name: str
+    data: object
+
+
+def _parse(line: bytes) -> PropertyChange | None:
+    """Return *line* as a property change, or None for anything else mpv sent.
+
+    mpv passes a filename's bytes through as they are, and a filename need not
+    be UTF-8. Decoding with "replace" keeps the line -- and so the path change
+    that ends the session before it -- at the cost of a U+FFFD per bad byte.
+    Dropping the line instead would fold the next file's numbers into the
+    previous session, and "surrogateescape" leaves lone surrogates that crash
+    `print` when `scrobd review` lists the path.
+    """
+    if not line.strip():
+        return None
+    try:
+        msg = json.loads(line.decode("utf-8", "replace"))
+    except json.JSONDecodeError:
+        return None                                   # never let one bad line end the stream
+    # Valid JSON need not be an object: `[]` parses, then has no `.get`.
+    if not (isinstance(msg, dict) and msg.get("event") == "property-change"):
+        return None
+    name = msg.get("name")
+    return PropertyChange(name=name, data=msg.get("data")) if isinstance(name, str) else None
 
 
 class MpvUnavailableError(Exception):
@@ -69,7 +103,7 @@ class MpvSocket:
         self._send([{"command": ["observe_property", i, prop]}
                     for i, prop in enumerate(WATCHED_PROPERTIES, start=1)])
 
-    def _send(self, payloads: list[dict]) -> None:
+    def _send(self, payloads: list[dict[str, object]]) -> None:
         """Write *payloads* to mpv as newline-delimited JSON, in one call."""
         if self._sock is None:
             msg = "not connected"
@@ -84,11 +118,17 @@ class MpvSocket:
             msg = f"{self.path} closed while subscribing ({exc}) -- did mpv just exit?"
             raise MpvUnavailableError(msg) from exc
 
-    def events(self) -> Iterator[dict]:
+    def events(self) -> Iterator[PropertyChange]:
         """Yield property-change events until mpv closes the socket."""
         if self._sock is None:
             self.connect()
         sock = self._sock
+        if sock is None:
+            # Unreachable: `connect` either sets the socket or raises. Said
+            # here, the same way `_send` says it, because a type checker cannot
+            # see what a method call did to an attribute.
+            msg = "not connected"
+            raise MpvUnavailableError(msg)
         buf = b""
         while True:
             try:
@@ -100,23 +140,9 @@ class MpvSocket:
             buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
-                if not line.strip():
-                    continue
-                # mpv passes a filename's bytes through as they are, and a
-                # filename need not be UTF-8. Decoding with "replace" keeps the
-                # line -- and so the path change that ends the session before
-                # it -- at the cost of a U+FFFD per bad byte. Dropping the line
-                # instead would fold the next file's numbers into the previous
-                # session, and "surrogateescape" leaves lone surrogates that
-                # crash `print` when `scrobd review` lists the path.
-                try:
-                    msg = json.loads(line.decode("utf-8", "replace"))
-                except json.JSONDecodeError:
-                    continue                          # never let one bad line end the stream
-                # Valid JSON need not be an object: `[]` parses, then has no `.get`.
-                if (isinstance(msg, dict) and msg.get("event") == "property-change"
-                        and "name" in msg):
-                    yield msg
+                change = _parse(line)
+                if change is not None:
+                    yield change
 
     def close(self) -> None:
         """Close the socket. Safe on one never opened, and safe to call twice."""

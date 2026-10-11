@@ -8,11 +8,11 @@ from pathlib import Path
 
 import pytest
 
-MPV = shutil.which("mpv")
+MPV = shutil.which("mpv") or ""
 SCRIPT = Path(__file__).resolve().parent.parent / "mpv" / "scrobd.lua"
 RESETS_SOCKET = Path(__file__).resolve().parent / "fixtures" / "resets_ipc_server.lua"
 CLIP = "av://lavfi:testsrc=size=64x64:rate=5"
-pytestmark = pytest.mark.skipif(MPV is None, reason="mpv is not installed")
+pytestmark = pytest.mark.skipif(not MPV, reason="mpv is not installed")
 
 
 def stub_scrobd(tmp_path: Path, bin_dir: Path | None = None) -> Path:

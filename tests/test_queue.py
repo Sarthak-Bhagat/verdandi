@@ -102,3 +102,12 @@ def test_resolve_entry_reports_whether_it_removed_anything():
     assert queue.resolve_entry("Unknown Show") is True
     assert queue.resolve_entry("Unknown Show") is False
     assert queue.resolve_entry("Unknown Show ") is False
+
+
+def test_an_entry_with_a_field_of_the_wrong_type_is_not_counted():
+    """`review` prints the folder and example; an entry that cannot be printed is not one."""
+    (state_dir() / "review.json").write_text(
+        '{"Odd": {"folder": "Odd", "title": 5, "example": "/m/Odd/x.mkv", "seen": 1}, '
+        '"Flag": {"folder": "Flag", "title": "F", "example": "/m/Flag/x.mkv", "seen": true}}')
+    assert queue.count() == 0
+    assert queue.pending() == []

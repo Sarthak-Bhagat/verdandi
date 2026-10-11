@@ -42,11 +42,14 @@ window directly instead of sleeping.
 """
 
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TypedDict
 
+from ._store import JsonObject
 from .paths import state_dir
-from .resolution import Resolution
+from .resolution import Confidence, Ids, Kind, Resolution, Source
 from .session import Session
 
 # 24 hours. Measured over 5,685 organic plays: genuine rewatches are 2.22% of
@@ -57,6 +60,29 @@ DEDUPE_WINDOW_S = 24 * 3600
 # parses. Dropping the fraction moves a row's time by under a second, which a
 # 24-hour window cannot notice, and the file's own line order keeps sequence.
 _TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+
+
+class Row(TypedDict):
+    """One line of the log, as `row` builds it. Rows read back are not assumed to be one."""
+
+    ts: str
+    path: str
+    started_at: float
+    ended_at: float
+    duration: float | None
+    first_pos: float | None
+    max_pos: float | None
+    samples: int
+    kind: Kind
+    ids: Ids
+    season: int | None
+    episode: int | None
+    absolute: int | None
+    title: str
+    confidence: Confidence
+    source: Source
 
 
 def _file() -> Path:
@@ -71,14 +97,14 @@ def _raw() -> bytes:
         return b""
 
 
-def _rows(raw: bytes) -> list[dict]:
+def _rows(raw: bytes) -> list[JsonObject]:
     """Parse *raw* into rows, skipping every line that is not a JSON object.
 
     Bytes, not text: one undecodable byte would otherwise fail the whole read,
     where here it fails `json.loads` for its own line only. Valid JSON of the
     wrong shape is skipped too -- `[]` parses cleanly and then has no `.get`.
     """
-    rows = []
+    rows: list[JsonObject] = []
     for line in raw.splitlines():
         try:
             row = json.loads(line)
@@ -89,12 +115,12 @@ def _rows(raw: bytes) -> list[dict]:
     return rows
 
 
-def read() -> list[dict]:
+def read() -> list[JsonObject]:
     """Return every recorded session, oldest first."""
     return _rows(_raw())
 
 
-def _recorded_at(row: dict) -> float | None:
+def _recorded_at(row: Mapping[str, object]) -> float | None:
     """Return when *row* was recorded, or None if its `ts` cannot be read."""
     ts = row.get("ts")
     if not isinstance(ts, str):
@@ -105,7 +131,8 @@ def _recorded_at(row: dict) -> float | None:
         return None
 
 
-def _same_identity_in_window(row: dict, resolution: Resolution, now: float) -> bool:
+def _same_identity_in_window(row: Mapping[str, object], resolution: Resolution,
+                             now: float) -> bool:
     """Whether *row* is the same identity as *resolution*, recorded inside the window."""
     when = _recorded_at(row)
     # Either side of `now`: a row stamped ahead of a clock that has since been
@@ -118,7 +145,7 @@ def _same_identity_in_window(row: dict, resolution: Resolution, now: float) -> b
 
 
 def _is_duplicate(session: Session, resolution: Resolution, now: float,
-                  rows: list[dict]) -> bool:
+                  rows: list[JsonObject]) -> bool:
     """Whether *session* repeats a play already logged inside the window and adds no progress.
 
     A session with no position adds none. A logged row with no position sets no
@@ -131,11 +158,11 @@ def _is_duplicate(session: Session, resolution: Resolution, now: float,
         return False
     if session.max_pos is None:
         return True
-    reached = [row["max_pos"] for row in prior if isinstance(row.get("max_pos"), int | float)]
+    reached = [pos for row in prior if isinstance(pos := row.get("max_pos"), int | float)]
     return bool(reached) and session.max_pos <= max(reached)
 
 
-def row(session: Session, resolution: Resolution, now: float) -> dict:
+def row(session: Session, resolution: Resolution, now: float) -> Row:
     """Return the row `record` writes for *session* as *resolution*, recorded at *now*.
 
     Public so that a caller reporting a session -- to the post-mortem log, or

@@ -20,7 +20,7 @@ import os
 import re
 from pathlib import Path
 
-from .resolution import UNKNOWN, Resolution
+from .resolution import UNKNOWN, Ids, Resolution
 
 _ID = re.compile(r"\[(tvdbid|imdbid|tmdbid|imdb|tvdb|tmdb)-([A-Za-z0-9]+)\]")
 # Public: index.py and aliases.py reuse this to read the episode numbers off a
@@ -45,8 +45,8 @@ _KEY = {"tvdbid": "tvdb", "tvdb": "tvdb",
         "tmdbid": "tmdb", "tmdb": "tmdb"}
 
 
-def _ids(text: str) -> dict:
-    out = {}
+def _ids(text: str) -> Ids:
+    out: Ids = {}
     for label, value in _ID.findall(text):
         if not value:                      # [imdb-] -- present but empty
             continue

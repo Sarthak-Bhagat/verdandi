@@ -14,32 +14,36 @@ Confidence is `high`, not `exact`: a human said so rather than *arr, which is
 worth distinguishing when auditing later.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Literal
 
-from ._store import read_table, write_atomic
+from ._store import JsonObject, read_table, write_atomic
 from .paths import data_dir
-from .resolution import UNKNOWN, Resolution
+from .resolution import UNKNOWN, Ids, Resolution, ids_from
 from .tier0 import SE_RE, absolute_from, ancestors
+
+AliasKind = Literal["episode", "movie"]
 
 
 def _file() -> Path:
     return data_dir() / "aliases.json"
 
 
-def load() -> dict:
+def load() -> JsonObject:
     """Every alias taught so far, keyed by folder. Read fresh every call."""
     return read_table(_file(), {})
 
 
-def remember(folder: str, ids: dict, kind: str, title: str) -> None:
+def remember(folder: str, ids: Ids, kind: AliasKind, title: str) -> None:
     """Teach the table one folder's answer, atomically."""
     t = load()
     t[folder] = {"ids": ids, "kind": kind, "title": title}
     write_atomic(_file(), t)    # atomic: the daemon may be reading
 
 
-def _row(table: dict, part: str) -> dict | None:
-    """One well-formed alias, or None.
+def _row(table: Mapping[str, object], part: str) -> tuple[Ids, AliasKind, str] | None:
+    """One well-formed alias as `(ids, kind, title)`, or None.
 
     The table is whatever is on disk, so nothing is assumed about a row's shape.
     `ids` and `kind` are checked strictly -- they decide the answer, and an
@@ -48,9 +52,14 @@ def _row(table: dict, part: str) -> dict | None:
     raised on, so one corrupt answer does not cost every other answer given.
     """
     entry = table.get(part)
-    if not (isinstance(entry, dict) and isinstance(entry.get("ids"), dict) and entry["ids"]):
+    if not isinstance(entry, dict):
         return None
-    return entry if entry.get("kind") in ("episode", "movie") else None
+    ids = ids_from(entry.get("ids"))
+    kind = entry.get("kind")
+    if ids is None or kind not in ("episode", "movie"):
+        return None
+    title = entry.get("title")
+    return ids, ("movie" if kind == "movie" else "episode"), title if isinstance(title, str) else ""
 
 
 def lookup(path: str) -> Resolution:
@@ -61,16 +70,15 @@ def lookup(path: str) -> Resolution:
         entry = _row(t, part)
         if entry is None:
             continue
-        title = entry.get("title")
-        title = title if isinstance(title, str) else ""
-        if entry["kind"] == "movie":
-            return Resolution(kind="movie", ids=dict(entry["ids"]), season=None,
+        ids, kind, title = entry
+        if kind == "movie":
+            return Resolution(kind="movie", ids=ids, season=None,
                               episode=None, absolute=None, title=title,
                               confidence="high", source="alias")
         se = SE_RE.search(stem)
         if not se:
             return UNKNOWN
-        return Resolution(kind="episode", ids=dict(entry["ids"]),
+        return Resolution(kind="episode", ids=ids,
                           season=int(se.group(1)), episode=int(se.group(2)),
                           absolute=absolute_from(stem),
                           title=title, confidence="high", source="alias")

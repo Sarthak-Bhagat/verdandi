@@ -8,35 +8,61 @@ Keyed on the folder, because every episode of a series shares one and the
 filename may have been renamed by hand.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import TypedDict
 
-from ._store import read_table, write_atomic
+from ._store import JsonObject, read_table, write_atomic
 from .paths import data_dir
-from .resolution import UNKNOWN, Resolution
+from .resolution import UNKNOWN, Ids, Resolution, ids_from
 from .tier0 import SE_RE, absolute_from, ancestors
 
 
-def build(series: list, movies: list) -> dict:
+class Row(TypedDict):
+    """One indexed series or film, keyed by its folder's name."""
+
+    ids: Ids
+    title: str
+
+
+Index = dict[str, dict[str, Row]]
+"""`{"series": {folder: Row}, "movies": {folder: Row}}`, as `build` writes it."""
+
+
+def _id(value: object) -> int | str | None:
+    """Return *value* if it is a usable id from the *arr's JSON, else None."""
+    if isinstance(value, bool) or not isinstance(value, int | str) or not value:
+        return None
+    return value
+
+
+def _title(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
+def build(series: list[JsonObject], movies: list[JsonObject]) -> Index:
     """Build the index dict from already-parsed Sonarr/Radarr JSON."""
-    out = {"series": {}, "movies": {}}
+    out: Index = {"series": {}, "movies": {}}
     for s in series:
-        if not s.get("path") or not s.get("tvdbId"):
+        path, tvdb = s.get("path"), _id(s.get("tvdbId"))
+        if not isinstance(path, str) or not path or tvdb is None:
             continue
-        ids = {"tvdb": s["tvdbId"]}
-        if s.get("imdbId"):
-            ids["imdb"] = s["imdbId"]
-        out["series"][Path(s["path"]).name] = {"ids": ids, "title": s.get("title", "")}
+        ids: Ids = {"tvdb": tvdb}
+        if (imdb := _id(s.get("imdbId"))) is not None:
+            ids["imdb"] = imdb
+        out["series"][Path(path).name] = {"ids": ids, "title": _title(s.get("title"))}
     for m in movies:
-        if not m.get("path"):
+        path = m.get("path")
+        if not isinstance(path, str) or not path:
             continue
         ids = {}
-        if m.get("imdbId"):
-            ids["imdb"] = m["imdbId"]
-        if m.get("tmdbId"):
-            ids["tmdb"] = m["tmdbId"]
+        if (imdb := _id(m.get("imdbId"))) is not None:
+            ids["imdb"] = imdb
+        if (tmdb := _id(m.get("tmdbId"))) is not None:
+            ids["tmdb"] = tmdb
         if not ids:
             continue
-        out["movies"][Path(m["path"]).name] = {"ids": ids, "title": m.get("title", "")}
+        out["movies"][Path(path).name] = {"ids": ids, "title": _title(m.get("title"))}
     return out
 
 
@@ -44,20 +70,20 @@ def _file() -> Path:
     return data_dir() / "index.json"
 
 
-def save(idx: dict) -> Path:
+def save(idx: Mapping[str, object]) -> Path:
     """Write the index to disk atomically and return the path written."""
     p = _file()
     write_atomic(p, idx)    # atomic: the daemon may be reading
     return p
 
 
-def load() -> dict:
+def load() -> JsonObject:
     """Read the index from disk, degrading to empty on missing or corrupt data."""
     return read_table(_file(), {"series": {}, "movies": {}})
 
 
-def _row(idx: dict, section: str, part: str) -> dict | None:
-    """One well-formed row of *section*, or None.
+def _row(idx: Mapping[str, object], section: str, part: str) -> tuple[Ids, str] | None:
+    """One well-formed row of *section* as `(ids, title)`, or None.
 
     The file on disk is whatever was last written there, so neither the section
     nor the row is assumed to be the shape `build` emits. `ids` is checked
@@ -67,32 +93,30 @@ def _row(idx: dict, section: str, part: str) -> dict | None:
     """
     rows = idx.get(section)
     entry = rows.get(part) if isinstance(rows, dict) else None
-    if not (isinstance(entry, dict) and isinstance(entry.get("ids"), dict) and entry["ids"]):
+    if not isinstance(entry, dict):
         return None
-    return entry
+    ids = ids_from(entry.get("ids"))
+    return None if ids is None else (ids, _title(entry.get("title")))
 
 
-def _title(entry: dict) -> str:
-    title = entry.get("title")
-    return title if isinstance(title, str) else ""
-
-
-def lookup(idx: dict, path: str) -> Resolution:
+def lookup(idx: Mapping[str, object], path: str) -> Resolution:
     """Identify a file by walking its ancestor directories against the index."""
     stem = Path(path).stem
     for part in ancestors(path):
-        entry = _row(idx, "series", part)
-        if entry is not None:
+        hit = _row(idx, "series", part)
+        if hit is not None:
             se = SE_RE.search(stem)
             if not se:
                 return UNKNOWN      # the index names the series, not the episode
-            return Resolution(kind="episode", ids=dict(entry["ids"]),
+            ids, title = hit
+            return Resolution(kind="episode", ids=ids,
                               season=int(se.group(1)), episode=int(se.group(2)),
                               absolute=absolute_from(stem),
-                              title=_title(entry), confidence="exact", source="index")
-        entry = _row(idx, "movies", part)
-        if entry is not None:
-            return Resolution(kind="movie", ids=dict(entry["ids"]), season=None,
-                              episode=None, absolute=None, title=_title(entry),
+                              title=title, confidence="exact", source="index")
+        hit = _row(idx, "movies", part)
+        if hit is not None:
+            ids, title = hit
+            return Resolution(kind="movie", ids=ids, season=None,
+                              episode=None, absolute=None, title=title,
                               confidence="exact", source="index")
     return UNKNOWN

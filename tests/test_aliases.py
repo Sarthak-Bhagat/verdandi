@@ -92,3 +92,12 @@ def test_a_malformed_entry_is_skipped_not_crashed_on():
     assert aliases.lookup("/x/Bad/Season 01/x - S01E01 - t.mkv").confidence == "none"
     assert aliases.lookup("/x/Worse/Season 01/x - S01E01 - t.mkv").confidence == "none"
     assert aliases.lookup("/x/Good/Season 01/x - S01E01 - t.mkv").ids == {"tvdb": 5}
+
+
+def test_an_entry_whose_ids_are_not_library_ids_is_skipped():
+    """An id is an int or a string. A list, a float or a bool is not one the resolver wrote."""
+    (data_dir() / "aliases.json").write_text(
+        '{"List": {"ids": {"tvdb": [5]}, "kind": "episode"}, '
+        '"Bool": {"ids": {"tvdb": true}, "kind": "episode"}}')
+    assert aliases.lookup("/x/List/Season 01/x - S01E01 - t.mkv").confidence == "none"
+    assert aliases.lookup("/x/Bool/Season 01/x - S01E01 - t.mkv").confidence == "none"

@@ -13,17 +13,20 @@ import os
 import signal
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import replace
 from pathlib import Path
 from types import FrameType, TracebackType
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from . import _log, aliases, config, index, queue, sessions
-from .mpv import MpvSocket, MpvUnavailableError
-from .resolution import UNKNOWN, Resolution
+from .mpv import MpvSocket, MpvUnavailableError, PropertyChange
+from .resolution import UNKNOWN, Ids, Resolution
 from .resolver import resolve as resolve_one
 from .session import Accumulator, Session
+
+if TYPE_CHECKING:
+    from .aliases import AliasKind
 
 
 def _describe(r: Resolution) -> str:
@@ -59,7 +62,15 @@ def _cmd_resolve(path: str) -> int:
 def _cmd_review(answer: str | None, tvdb: int | None, imdb: str | None) -> int:
     """Show the review queue, or teach an answer for one queued folder."""
     if answer:
-        if not (tvdb or imdb):
+        ids: Ids
+        kind: AliasKind
+        if tvdb:
+            ids = {"tvdb": tvdb}
+            kind = "episode"
+        elif imdb:
+            ids = {"imdb": imdb}
+            kind = "movie"
+        else:
             print("give an id: --tvdb N or --imdb ttNNNNN", file=sys.stderr)
             return 2
         # Clear the queue first. If the folder was never queued, the alias would
@@ -70,8 +81,6 @@ def _cmd_review(answer: str | None, tvdb: int | None, imdb: str | None) -> int:
             print(f"nothing queued under {answer!r} -- folder names are matched "
                   "literally; `scrobd review` lists them", file=sys.stderr)
             return 1
-        ids = {"tvdb": tvdb} if tvdb else {"imdb": imdb}
-        kind = "episode" if tvdb else "movie"
         aliases.remember(answer, ids, kind, answer)
         # `cleared` is True here by construction -- the guard above returns
         # otherwise. Recorded rather than assumed: that ordering is itself a fix
@@ -253,7 +262,7 @@ class _Recorder:
             print(json.dumps(sessions.row(session, UNKNOWN, now)), file=sys.stderr)
         self.in_hand = None
 
-    def _report(self, row: dict, *why: str) -> None:
+    def _report(self, row: Mapping[str, object], *why: str) -> None:
         """Put a failed write's reason and its row on stderr, where the session survives it."""
         for line in why:
             print(line, file=sys.stderr)
@@ -328,7 +337,7 @@ class _Interrupts:
             self._waiting = False
             raise KeyboardInterrupt
 
-    def next_event(self, events: Iterator[dict]) -> dict | None:
+    def next_event(self, events: Iterator[PropertyChange]) -> PropertyChange | None:
         """Return mpv's next event, or None once mpv closes the socket or a signal arrives."""
         try:
             # `_waiting` is set before `_requested` is read, and the handler
@@ -382,8 +391,7 @@ def _follow(mpv: MpvSocket, acc: Accumulator, recorder: _Recorder,
     events = mpv.events()
     try:
         while (e := interrupts.next_event(events)) is not None:
-            # `.get`: a property mpv cannot report yet may arrive with no `data`.
-            acc.feed(e["name"], e.get("data"), time.time())
+            acc.feed(e["name"], e["data"], time.time())
             # Take after every feed: the accumulator holds one finished session,
             # and one left untaken is overwritten by the next without a word.
             recorder.record(acc.take())

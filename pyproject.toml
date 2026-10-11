@@ -6,7 +6,11 @@ requires-python = ">=3.11"
 dependencies = []
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.14"]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.14",
+    "ty>=0.0.86",
+]
 
 [project.scripts]
 scrobd = "scrobd.cli:main"

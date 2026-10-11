@@ -17,10 +17,14 @@ comment naming the reader lives at each call site rather than here.
 """
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
+JsonObject = dict[str, object]
+"""A JSON object read off disk. Its values are unknown until the caller checks them."""
 
-def read_table(p: Path, default: dict) -> dict:
+
+def read_table(p: Path, default: JsonObject) -> JsonObject:
     """Read the JSON table at *p*, degrading to *default* if missing, corrupt or not a table.
 
     "Corrupt" includes valid JSON of the wrong shape. `[]` parses cleanly and
@@ -37,7 +41,7 @@ def read_table(p: Path, default: dict) -> dict:
     return table if isinstance(table, dict) else default
 
 
-def write_atomic(p: Path, data: dict) -> None:
+def write_atomic(p: Path, data: Mapping[str, object]) -> None:
     """Write *data* to *p* as JSON via a temporary sibling file and one rename."""
     tmp = p.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=1))

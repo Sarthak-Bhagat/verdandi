@@ -67,7 +67,7 @@ def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _header() -> dict:
+def _header() -> dict[str, object]:
     """Return the first line of a new log file: what this is and when it expires."""
     return {
         "ts": _now(),
