@@ -54,12 +54,18 @@ _DUPLICATE_S = 24 * 3600
 # the same play. An attempt is logged when mpv stops, as the session ends.
 _SAME_PLAY_S = 3600
 
-_LINE = re.compile(r"(?P<when>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ - "
-                   r"(?P<level>DEBUG|INFO|WARNING) - .+? - scrobbler - (?P<msg>.*)")
-_SUCCESS = re.compile(r"Scrobble (?P<action>start|pause|resume|stop) successful for (?P<name>.+)"
-                      r" at (?P<pct>\d+(?:\.\d+)?)%")
-_ATTEMPT = re.compile(r"Scrobbling (?P<action>start|pause|stop) at (?P<pct>\d+(?:\.\d+)?)% "
-                      r"for (?P<title>.+)")
+_LINE = re.compile(
+    r"(?P<when>\d{4}-\d\d-\d\d \d\d:\d\d:\d\d),\d+ - "
+    r"(?P<level>DEBUG|INFO|WARNING) - .+? - scrobbler - (?P<msg>.*)"
+)
+_SUCCESS = re.compile(
+    r"Scrobble (?P<action>start|pause|resume|stop) successful for (?P<name>.+)"
+    r" at (?P<pct>\d+(?:\.\d+)?)%"
+)
+_ATTEMPT = re.compile(
+    r"Scrobbling (?P<action>start|pause|stop) at (?P<pct>\d+(?:\.\d+)?)% "
+    r"for (?P<title>.+)"
+)
 _EPISODE = re.compile(r"(?P<title>.+) S(?P<season>\d+)E(?P<episode>\d+)")
 _DISCARDED = "Scrobble unsuccessful. Discarding it."
 _DEFERRED = "Scrobble unsuccessful. Will try again later."
@@ -70,7 +76,7 @@ class Entry(TypedDict):
 
     at: str
     t: float
-    kind: str               # scrobbled | attempt | discarded | deferred
+    kind: str  # scrobbled | attempt | discarded | deferred
     action: str | None
     title: str | None
     season: int | None
@@ -92,8 +98,9 @@ def parse_local(stamp: str) -> float:
 def _entry(t: float, kind: str) -> Entry:
     """Return an entry of *kind* at Unix time *t*, every other field empty."""
     at = datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return Entry(at=at, t=t, kind=kind, action=None, title=None, season=None, episode=None,
-                 progress=None)
+    return Entry(
+        at=at, t=t, kind=kind, action=None, title=None, season=None, episode=None, progress=None
+    )
 
 
 def _attempt(t: float, msg: str) -> Entry | None:
@@ -143,8 +150,10 @@ def _key(e: Entry | JsonObject) -> tuple[object, ...]:
 def _read_logs() -> list[Entry]:
     """Every kept entry in trakt-scrobbler's current logs, oldest file first."""
     base = log_dir() / "trakt_scrobbler.log"
-    rotated = sorted(base.parent.glob("trakt_scrobbler.log.*"),
-                     key=lambda p: -int(p.suffix[1:]) if p.suffix[1:].isdigit() else 0)
+    rotated = sorted(
+        base.parent.glob("trakt_scrobbler.log.*"),
+        key=lambda p: -int(p.suffix[1:]) if p.suffix[1:].isdigit() else 0,
+    )
     out: list[Entry] = []
     for p in [*rotated, base]:
         if not p.is_file():
@@ -223,7 +232,7 @@ def _norm(title: object) -> str:
 class Difference:
     """One watch only one side recorded."""
 
-    side: str               # "only scrobd" | "only trakt-scrobbler"
+    side: str  # "only scrobd" | "only trakt-scrobbler"
     title: str
     season: int | None
     episode: int | None
@@ -261,16 +270,25 @@ def _ident(row: JsonObject) -> tuple[str, int | None, int | None]:
 
 
 def _diff(side: str, row: JsonObject, at: float, reason: str | None = None) -> Difference:
-    return Difference(side=side, title=str(row.get("title") or ""), season=_int(row.get("season")),
-                      episode=_int(row.get("episode")), at=at, reason=reason)
+    return Difference(
+        side=side,
+        title=str(row.get("title") or ""),
+        season=_int(row.get("season")),
+        episode=_int(row.get("episode")),
+        at=at,
+        reason=reason,
+    )
 
 
-def _trakt_reason(row: JsonObject, at: float, scrobd_skips: list[JsonObject],
-                  matched: list[tuple[JsonObject, JsonObject]]) -> str | None:
+def _trakt_reason(
+    row: JsonObject,
+    at: float,
+    scrobd_skips: list[JsonObject],
+    matched: list[tuple[JsonObject, JsonObject]],
+) -> str | None:
     """Why a watch only trakt-scrobbler recorded is not a fault, if it is not."""
     ident = _ident(row)
-    if any(_ident(t) == ident and 0 <= at - (_num(t, "t") or 0) < _DUPLICATE_S
-           for t, _ in matched):
+    if any(_ident(t) == ident and 0 <= at - (_num(t, "t") or 0) < _DUPLICATE_S for t, _ in matched):
         return "trakt-scrobbler logged it twice inside a day"
     for s in scrobd_skips:
         if _ident(s) == ident:
@@ -283,8 +301,11 @@ def _scrobd_reason(row: JsonObject, mirror: list[JsonObject]) -> str | None:
     """Why a watch only scrobd recorded is not a fault, if it is not."""
     ended = _num(row, "ended_at") or 0.0
     for i, e in enumerate(mirror[:-1]):
-        if (e.get("kind") == "attempt" and _norm(e.get("title")) == _norm(row.get("title"))
-                and abs((_num(e, "t") or 0.0) - ended) <= _SAME_PLAY_S):
+        if (
+            e.get("kind") == "attempt"
+            and _norm(e.get("title")) == _norm(row.get("title"))
+            and abs((_num(e, "t") or 0.0) - ended) <= _SAME_PLAY_S
+        ):
             follow = mirror[i + 1].get("kind")
             if follow == "discarded":
                 return "trakt-scrobbler discarded it"
@@ -302,14 +323,27 @@ def compare(n: int, rows: list[JsonObject], mirror: list[JsonObject]) -> Compari
         return t is not None and start <= t < end
 
     # Only rows that can say whether they were watched: those carrying content.
-    measured = [r for r in rows if inside(_num(r, "ended_at")) and _share(r, "content_seconds")
-                is not None]
+    measured = [
+        r for r in rows if inside(_num(r, "ended_at")) and _share(r, "content_seconds") is not None
+    ]
     watched = [r for r in measured if (_share(r, "content_seconds") or 0.0) >= _WATCHED]
-    skips = [r for r in measured if (_share(r, "content_seconds") or 0.0) < _WATCHED
-             and (_share(r, "max_pos") or 0.0) >= _WATCHED]
-    trakt = sorted((e for e in mirror if e.get("kind") == "scrobbled" and e.get("action") == "stop"
-                    and (_num(e, "progress") or 0.0) >= _WATCHED * 100 and inside(_num(e, "t"))),
-                   key=lambda e: _num(e, "t") or 0.0)
+    skips = [
+        r
+        for r in measured
+        if (_share(r, "content_seconds") or 0.0) < _WATCHED
+        and (_share(r, "max_pos") or 0.0) >= _WATCHED
+    ]
+    trakt = sorted(
+        (
+            e
+            for e in mirror
+            if e.get("kind") == "scrobbled"
+            and e.get("action") == "stop"
+            and (_num(e, "progress") or 0.0) >= _WATCHED * 100
+            and inside(_num(e, "t"))
+        ),
+        key=lambda e: _num(e, "t") or 0.0,
+    )
     for t in trakt:
         at = _num(t, "t") or 0.0
         hit = next((r for r in watched if _ident(r) == _ident(t)), None)
@@ -319,7 +353,8 @@ def compare(n: int, rows: list[JsonObject], mirror: list[JsonObject]) -> Compari
             continue
         reason = _trakt_reason(t, at, skips, out.matched)
         (out.explained if reason else out.unexplained).append(
-            _diff("only trakt-scrobbler", t, at, reason))
+            _diff("only trakt-scrobbler", t, at, reason)
+        )
     window_mirror = [e for e in mirror if inside(_num(e, "t"))]
     for r in watched:
         at = _num(r, "ended_at") or 0.0

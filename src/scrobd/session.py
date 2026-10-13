@@ -113,7 +113,7 @@ class Accumulator:
         if name == "pause" and isinstance(data, bool):
             self._tick(now)
             self._paused = data
-            self._ref = None        # position resumes from wherever playback restarts
+            self._ref = None  # position resumes from wherever playback restarts
             return
         if name == "speed" and isinstance(data, int | float):
             self._set_speed(float(data))
@@ -194,12 +194,16 @@ class Accumulator:
         allowed = (now - last_now) * (self._speed or 1.0) if playing else 0.0
         advance = pos - last_pos
         if advance < -_SEEK_SLACK_S:
-            self._burst_at = None       # a tap back ends a burst
+            self._burst_at = None  # a tap back ends a burst
             return
         if not (jumped or advance > allowed + _SEEK_SLACK_S) or advance <= _SEEK_SLACK_S:
             return
-        if (self._skips and self._burst_at is not None and now - self._burst_at < _BURST_GAP_S
-                and last_pos - self._skips[-1][1] < _BURST_PLAYED_S):
+        if (
+            self._skips
+            and self._burst_at is not None
+            and now - self._burst_at < _BURST_GAP_S
+            and last_pos - self._skips[-1][1] < _BURST_PLAYED_S
+        ):
             self._skips[-1] = (self._skips[-1][0], pos)
         else:
             self._skips.append((last_pos, pos))
@@ -251,11 +255,20 @@ class Accumulator:
         # `duration`, `first_pos` and `max_pos` stay None when mpv never
         # reported them. A missing number is a gap the reader can handle; a
         # guessed one is a lie in a watch history. Nothing here derives "watched".
-        self._done = Session(session=self._id, path=self._path, started_at=self._started,
-                             ended_at=max(now, self._last), duration=self._duration,
-                             first_pos=self._first_pos, max_pos=self._max_pos,
-                             samples=self._samples, content_seconds=round(self._content, 3),
-                             wall_seconds=round(self._wall, 3), speed_last=self._speed_last,
-                             speed_max=self._speed_max, end_reason=self._end_reason,
-                             skips=tuple((round(a, 3), round(b, 3)) for a, b in self._skips))
+        self._done = Session(
+            session=self._id,
+            path=self._path,
+            started_at=self._started,
+            ended_at=max(now, self._last),
+            duration=self._duration,
+            first_pos=self._first_pos,
+            max_pos=self._max_pos,
+            samples=self._samples,
+            content_seconds=round(self._content, 3),
+            wall_seconds=round(self._wall, 3),
+            speed_last=self._speed_last,
+            speed_max=self._speed_max,
+            end_reason=self._end_reason,
+            skips=tuple((round(a, 3), round(b, 3)) for a, b in self._skips),
+        )
         self._path = None

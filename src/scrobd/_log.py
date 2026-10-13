@@ -37,7 +37,7 @@ from pathlib import Path
 from .paths import state_dir
 
 _FILE = "scrobd.jsonl"
-_OFF = "SCROBD_LOG"         # "0" disables; anything else, including unset, leaves it on
+_OFF = "SCROBD_LOG"  # "0" disables; anything else, including unset, leaves it on
 
 # The date the artefact carries about itself, so the file explains itself to
 # whoever finds it without this repo open.
@@ -73,8 +73,10 @@ def _header() -> dict[str, object]:
         "ts": _now(),
         "event": "log_started",
         "added": _ADDED,
-        "note": (f"post-mortem log of what scrobd decided, added {_ADDED}; kept with no "
-                 "expiry. SCROBD_LOG=0 turns it off."),
+        "note": (
+            f"post-mortem log of what scrobd decided, added {_ADDED}; kept with no "
+            "expiry. SCROBD_LOG=0 turns it off."
+        ),
     }
 
 
@@ -90,9 +92,10 @@ def _warn_if_large(path: Path) -> None:
         _warned.add(key)
         sys.stderr.write(
             f"scrobd: {path} has reached {size / (1024 * 1024):.0f} MB -- move it aside "
-            f"to start a fresh one, or set SCROBD_LOG=0 to turn it off\n")
+            f"to start a fresh one, or set SCROBD_LOG=0 to turn it off\n"
+        )
     except (OSError, ValueError):
-        return          # a stat that fails or a closed stderr is not worth a traceback
+        return  # a stat that fails or a closed stderr is not worth a traceback
 
 
 def event(kind: str, /, **fields: object) -> None:

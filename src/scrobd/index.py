@@ -73,7 +73,7 @@ def _file() -> Path:
 def save(idx: Mapping[str, object]) -> Path:
     """Write the index to disk atomically and return the path written."""
     p = _file()
-    write_atomic(p, idx)    # atomic: the daemon may be reading
+    write_atomic(p, idx)  # atomic: the daemon may be reading
     return p
 
 
@@ -107,16 +107,29 @@ def lookup(idx: Mapping[str, object], path: str) -> Resolution:
         if hit is not None:
             se = SE_RE.search(stem)
             if not se:
-                return UNKNOWN      # the index names the series, not the episode
+                return UNKNOWN  # the index names the series, not the episode
             ids, title = hit
-            return Resolution(kind="episode", ids=ids,
-                              season=int(se.group(1)), episode=int(se.group(2)),
-                              absolute=absolute_from(stem),
-                              title=title, confidence="exact", source="index")
+            return Resolution(
+                kind="episode",
+                ids=ids,
+                season=int(se.group(1)),
+                episode=int(se.group(2)),
+                absolute=absolute_from(stem),
+                title=title,
+                confidence="exact",
+                source="index",
+            )
         hit = _row(idx, "movies", part)
         if hit is not None:
             ids, title = hit
-            return Resolution(kind="movie", ids=ids, season=None,
-                              episode=None, absolute=None, title=title,
-                              confidence="exact", source="index")
+            return Resolution(
+                kind="movie",
+                ids=ids,
+                season=None,
+                episode=None,
+                absolute=None,
+                title=title,
+                confidence="exact",
+                source="index",
+            )
     return UNKNOWN

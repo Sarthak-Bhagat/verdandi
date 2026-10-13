@@ -19,8 +19,11 @@ def idx():
 
 
 def test_maps_a_series_folder_to_its_tvdb_id(idx):
-    r = index.lookup(idx, "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/"
-                          "Season 01/anything at all - S01E04 - x.mkv")
+    r = index.lookup(
+        idx,
+        "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/"
+        "Season 01/anything at all - S01E04 - x.mkv",
+    )
     assert r.ids == {"tvdb": 466998, "imdb": "tt40247521"}
     assert (r.season, r.episode) == (1, 4)
     assert r.confidence == "exact"
@@ -40,8 +43,9 @@ def test_unknown_folder_is_unresolved(idx):
 
 def test_episode_numbers_still_come_from_the_filename(idx):
     """The index identifies the series; only the filename says which episode."""
-    r = index.lookup(idx, "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/"
-                          "Season 01/x.mkv")
+    r = index.lookup(
+        idx, "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/Season 01/x.mkv"
+    )
     assert r.confidence == "none"
 
 
@@ -70,21 +74,29 @@ def test_corrupt_index_does_not_raise(tmp_path, monkeypatch):
 
 def test_a_cancelled_out_ancestor_does_not_match(idx):
     """Pathlib keeps `..` literal, so the real directory here is /data/media/staging."""
-    r = index.lookup(idx, "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/../"
-                          "staging/incoming/f - S01E01 - t.mkv")
+    r = index.lookup(
+        idx,
+        "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/../"
+        "staging/incoming/f - S01E01 - t.mkv",
+    )
     assert r.confidence == "none"
 
 
 def test_a_dot_segment_does_not_stop_a_real_match(idx):
     """Normalising must not break the paths that should resolve."""
-    r = index.lookup(idx, "/data/media/TV_Shows/./Spooky in Love (2026) [tvdbid-466998]/"
-                          "Season 01/x - S01E04 - y.mkv")
+    r = index.lookup(
+        idx,
+        "/data/media/TV_Shows/./Spooky in Love (2026) [tvdbid-466998]/Season 01/x - S01E04 - y.mkv",
+    )
     assert r.ids["tvdb"] == 466998
 
 
 def test_a_resolution_is_not_an_absolute_number(idx):
-    r = index.lookup(idx, "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/"
-                          "Season 01/x - S01E04 - 1080 - y [WEBDL-1080p].mkv")
+    r = index.lookup(
+        idx,
+        "/data/media/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/"
+        "Season 01/x - S01E04 - 1080 - y [WEBDL-1080p].mkv",
+    )
     assert r.absolute is None
 
 
@@ -97,15 +109,17 @@ def test_json_of_the_wrong_shape_degrades_to_empty(tmp_path, monkeypatch):
 
 
 def test_a_section_of_the_wrong_shape_is_not_walked():
-    r = index.lookup({"series": ["Show A"], "movies": None},
-                     "/m/Show A/Season 01/x - S01E01 - y.mkv")
+    r = index.lookup(
+        {"series": ["Show A"], "movies": None}, "/m/Show A/Season 01/x - S01E01 - y.mkv"
+    )
     assert r.confidence == "none"
 
 
 def test_a_malformed_entry_is_skipped_not_crashed_on():
     """One corrupt row must not make every other series unresolvable."""
-    idx = {"series": {"Bad": "not an entry",
-                      "Good": {"ids": {"tvdb": 5}, "title": "Good"}},
-           "movies": {}}
+    idx = {
+        "series": {"Bad": "not an entry", "Good": {"ids": {"tvdb": 5}, "title": "Good"}},
+        "movies": {},
+    }
     assert index.lookup(idx, "/m/Bad/Season 01/x - S01E01 - y.mkv").confidence == "none"
     assert index.lookup(idx, "/m/Good/Season 01/x - S01E01 - y.mkv").ids == {"tvdb": 5}

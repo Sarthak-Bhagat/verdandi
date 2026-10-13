@@ -72,8 +72,6 @@ _CLIENT = socket.gethostname()
 _TS_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 
-
-
 class Row(TypedDict):
     """One line of the log, as `row` builds it. Rows read back are not assumed to be one."""
 
@@ -126,7 +124,7 @@ def _rows(raw: bytes) -> list[JsonObject]:
     for line in raw.splitlines():
         try:
             row = json.loads(line)
-        except ValueError:      # JSONDecodeError and UnicodeDecodeError both
+        except ValueError:  # JSONDecodeError and UnicodeDecodeError both
             continue
         if isinstance(row, dict):
             rows.append(row)
@@ -149,28 +147,31 @@ def _recorded_at(row: Mapping[str, object]) -> float | None:
         return None
 
 
-def _same_identity_in_window(row: Mapping[str, object], resolution: Resolution,
-                             now: float) -> bool:
+def _same_identity_in_window(row: Mapping[str, object], resolution: Resolution, now: float) -> bool:
     """Whether *row* is the same identity as *resolution*, recorded inside the window."""
     when = _recorded_at(row)
     # Either side of `now`: a row stamped ahead of a clock that has since been
     # set back is still within a day of this one, and one stamped far ahead
     # must not suppress that identity until the clock catches up.
-    return (when is not None and abs(now - when) < DEDUPE_WINDOW_S
-            and row.get("ids") == resolution.ids
-            and row.get("season") == resolution.season
-            and row.get("episode") == resolution.episode)
+    return (
+        when is not None
+        and abs(now - when) < DEDUPE_WINDOW_S
+        and row.get("ids") == resolution.ids
+        and row.get("season") == resolution.season
+        and row.get("episode") == resolution.episode
+    )
 
 
-def _is_duplicate(session: Session, resolution: Resolution, now: float,
-                  rows: list[JsonObject]) -> bool:
+def _is_duplicate(
+    session: Session, resolution: Resolution, now: float, rows: list[JsonObject]
+) -> bool:
     """Whether *session* repeats a play already logged inside the window and adds no progress.
 
     A session with no position adds none. A logged row with no position sets no
     bar, so it never blocks a session that has one.
     """
     if not resolution.ids:
-        return False            # two unknowns are not the same thing
+        return False  # two unknowns are not the same thing
     prior = [row for row in rows if _same_identity_in_window(row, resolution, now)]
     if not prior:
         return False
@@ -222,7 +223,7 @@ def record(session: Session, resolution: Resolution, now: float) -> bool:
         return False
     line = json.dumps(row(session, resolution, now)) + "\n"
     if raw and not raw.endswith(b"\n"):
-        line = "\n" + line      # end the torn line, so it costs only itself
+        line = "\n" + line  # end the torn line, so it costs only itself
     with _file().open("a", encoding="utf-8") as fh:
         fh.write(line)
     return True

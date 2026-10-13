@@ -32,13 +32,30 @@ def stub_scrobd(tmp_path: Path, bin_dir: Path | None = None) -> Path:
 
 def play(tmp_path: Path, *args: str, **overrides: str) -> None:
     """Run mpv with the launcher loaded and `tmp_path/bin` first on PATH; *overrides* win."""
-    env = {**os.environ,
-           "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}",
-           "XDG_STATE_HOME": str(tmp_path / "state"), **overrides}
+    env = {
+        **os.environ,
+        "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}",
+        "XDG_STATE_HOME": str(tmp_path / "state"),
+        **overrides,
+    }
     subprocess.run(
-        [MPV, "--no-config", "--vo=null", "--ao=null", "--frames=3", "--idle=no",
-         "--keep-open=no", f"--script={SCRIPT}", *args],
-        check=True, capture_output=True, timeout=30, env=env, cwd=tmp_path)
+        [
+            MPV,
+            "--no-config",
+            "--vo=null",
+            "--ao=null",
+            "--frames=3",
+            "--idle=no",
+            "--keep-open=no",
+            f"--script={SCRIPT}",
+            *args,
+        ],
+        check=True,
+        capture_output=True,
+        timeout=30,
+        env=env,
+        cwd=tmp_path,
+    )
 
 
 def wait_for(path: Path, seconds: float = 5.0) -> bool:
@@ -83,8 +100,13 @@ def test_it_watches_the_socket_a_script_moved_it_to_not_the_one_mpv_started_with
     # does too, at a moment that makes the outcome deterministic; see its header.
     record = stub_scrobd(tmp_path)
     first, final = tmp_path / "first.sock", tmp_path / "final.sock"
-    play(tmp_path, f"--input-ipc-server={first}", f"--script={RESETS_SOCKET}",
-         f"--script-opts=resets_ipc_server-path={final}", CLIP)
+    play(
+        tmp_path,
+        f"--input-ipc-server={first}",
+        f"--script={RESETS_SOCKET}",
+        f"--script-opts=resets_ipc_server-path={final}",
+        CLIP,
+    )
     assert wait_for(record)
     assert record.read_text().splitlines() == [f"watch --socket {final}"]
 
@@ -117,6 +139,10 @@ def test_it_does_nothing_without_an_ipc_socket(tmp_path):
 
 def test_it_can_be_switched_off(tmp_path):
     record = stub_scrobd(tmp_path)
-    play(tmp_path, f"--input-ipc-server={tmp_path / 'mpv.sock'}",
-         "--script-opts=scrobd-enabled=no", CLIP)
+    play(
+        tmp_path,
+        f"--input-ipc-server={tmp_path / 'mpv.sock'}",
+        "--script-opts=scrobd-enabled=no",
+        CLIP,
+    )
     assert not wait_for(record, 1.0)

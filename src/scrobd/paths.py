@@ -15,9 +15,7 @@ APP = "scrobd"
 def _base(env_var: str, *fallback: str) -> Path:
     root = os.environ.get(env_var)
     base = (
-        Path(root)
-        if root
-        else Path(os.environ.get("HOME", "~")).expanduser().joinpath(*fallback)
+        Path(root) if root else Path(os.environ.get("HOME", "~")).expanduser().joinpath(*fallback)
     )
     d = base / APP
     d.mkdir(parents=True, exist_ok=True)

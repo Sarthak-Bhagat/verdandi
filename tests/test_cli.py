@@ -54,8 +54,7 @@ def test_review_answer_requires_an_id():
 
 def test_index_from_json(tmp_path, capsys):
     s = tmp_path / "s.json"
-    s.write_text(json.dumps(
-        [{"id": 1, "title": "T", "tvdbId": 1, "path": "/m/TV_Shows/T (2020)"}]))
+    s.write_text(json.dumps([{"id": 1, "title": "T", "tvdbId": 1, "path": "/m/TV_Shows/T (2020)"}]))
     m = tmp_path / "m.json"
     m.write_text("[]")
     rc = cli.main(["index", "--from-json", str(s), str(m)])
@@ -104,8 +103,16 @@ def test_an_answer_that_matched_nothing_writes_no_alias():
 
 def test_resolve_queues_a_low_confidence_guess_rather_than_announcing_it(monkeypatch, capsys):
     """Tier 3 returns `low`. It must reach the queue, never a sink and never exit 0."""
-    guess = Resolution(kind="episode", ids={"tvdb": 1}, season=1, episode=1, absolute=None,
-                       title="Guessed Show", confidence="low", source="search")
+    guess = Resolution(
+        kind="episode",
+        ids={"tvdb": 1},
+        season=1,
+        episode=1,
+        absolute=None,
+        title="Guessed Show",
+        confidence="low",
+        source="search",
+    )
     monkeypatch.setattr(cli, "resolve_one", lambda _path: guess)
     rc = cli.main(["resolve", "/m/Guessed Show/Season 01/x - S01E01 - t.mkv"])
     assert rc == 1
@@ -122,9 +129,21 @@ def test_a_wrong_shape_alias_file_does_not_drop_the_file_on_the_floor():
 
 
 def test_compare_prints_the_window_and_fails_on_an_unexplained_difference(capsys):
-    (state_dir() / "trakt-scrobbler.jsonl").write_text(json.dumps(
-        {"at": "2026-10-12T21:00:00Z", "t": 1791838800.0, "kind": "scrobbled", "action": "stop",
-         "title": "Some Show", "season": 2, "episode": 5, "progress": 93.5}) + "\n")
+    (state_dir() / "trakt-scrobbler.jsonl").write_text(
+        json.dumps(
+            {
+                "at": "2026-10-12T21:00:00Z",
+                "t": 1791838800.0,
+                "kind": "scrobbled",
+                "action": "stop",
+                "title": "Some Show",
+                "season": 2,
+                "episode": 5,
+                "progress": 93.5,
+            }
+        )
+        + "\n"
+    )
     assert cli.main(["compare", "1"]) == 1
     out = capsys.readouterr().out
     assert "window 1: 2026-10-11 → 2026-11-10" in out

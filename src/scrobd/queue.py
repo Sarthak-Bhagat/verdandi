@@ -24,7 +24,6 @@ from .paths import state_dir
 _SEASON_DIR = re.compile(r"season\s*\d+|specials", re.IGNORECASE)
 
 
-
 class Entry(TypedDict):
     """One series waiting on an answer: the shape `add` writes."""
 
@@ -43,7 +42,7 @@ def _load() -> JsonObject:
 
 
 def _save(table: Mapping[str, object]) -> None:
-    write_atomic(_file(), table)    # atomic: the review command may be reading
+    write_atomic(_file(), table)  # atomic: the review command may be reading
 
 
 def _folder_key(path: str) -> str:
@@ -66,8 +65,11 @@ def _is_row(entry: object) -> TypeGuard[Entry]:
         return False
     text = (entry.get("folder"), entry.get("title"), entry.get("example"))
     seen = entry.get("seen")
-    return (all(isinstance(t, str) for t in text)
-            and isinstance(seen, int) and not isinstance(seen, bool))
+    return (
+        all(isinstance(t, str) for t in text)
+        and isinstance(seen, int)
+        and not isinstance(seen, bool)
+    )
 
 
 def add(path: str, title: str) -> Entry:
@@ -83,7 +85,7 @@ def add(path: str, title: str) -> Entry:
     entry = table.get(folder)
     if not _is_row(entry):
         entry = Entry(folder=folder, title=title, example=path, seen=0)
-        table[folder] = entry       # a malformed row is replaced, not accumulated onto
+        table[folder] = entry  # a malformed row is replaced, not accumulated onto
     entry["seen"] += 1
     _save(table)
     return entry
@@ -109,7 +111,7 @@ def resolve_entry(folder: str) -> bool:
     """
     table = _load()
     if not _is_row(table.get(folder)):
-        return False                # nothing `pending()` would have listed
+        return False  # nothing `pending()` would have listed
     del table[folder]
     _save(table)
     return True

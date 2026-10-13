@@ -67,8 +67,10 @@ def library_roots() -> list[str] | None:
     entries = table.get("library", [])
     if not isinstance(entries, list):
         # Not iterated: a string's characters include `/`, a root holding everything.
-        _warn(f"{file}: `library` must be a list of folders, not {type(entries).__name__}, "
-              "so no library is set")
+        _warn(
+            f"{file}: `library` must be a list of folders, not {type(entries).__name__}, "
+            "so no library is set"
+        )
         return None
     roots = []
     for entry in entries:
@@ -90,7 +92,7 @@ def _absolute_folder(entry: object) -> str | None:
         return None
     try:
         folder = Path(entry).expanduser()
-    except RuntimeError:            # `~someone` with no such user, or no home at all
+    except RuntimeError:  # `~someone` with no such user, or no home at all
         return None
     # `normpath`, not `resolve`: it folds `..` in the string and never asks the mount.
     return os.path.normpath(folder) if folder.is_absolute() else None

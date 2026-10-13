@@ -45,9 +45,18 @@ def _cmd_resolve(path: str) -> int:
     r = resolve_one(path)
     # Logged here rather than in `resolve`, which must stay free of I/O -- see
     # `_log`'s docstring. `source` records which tier actually answered.
-    _log.event("resolve", path=path, source=r.source, confidence=r.confidence,
-               ids=r.ids, kind=r.kind, season=r.season, episode=r.episode,
-               absolute=r.absolute, title=r.title)
+    _log.event(
+        "resolve",
+        path=path,
+        source=r.source,
+        confidence=r.confidence,
+        ids=r.ids,
+        kind=r.kind,
+        season=r.season,
+        episode=r.episode,
+        absolute=r.absolute,
+        title=r.title,
+    )
     if not r.is_actionable:
         # `is_actionable`, not `confidence == "none"`. Tier 3 returns `low`, and
         # the day it lands a `none` test would print a guess and exit 0.
@@ -79,8 +88,11 @@ def _cmd_review(answer: str | None, tvdb: int | None, imdb: str | None) -> int:
         # queued forever while the command reported success.
         cleared = queue.resolve_entry(answer)
         if not cleared:
-            print(f"nothing queued under {answer!r} -- folder names are matched "
-                  "literally; `scrobd review` lists them", file=sys.stderr)
+            print(
+                f"nothing queued under {answer!r} -- folder names are matched "
+                "literally; `scrobd review` lists them",
+                file=sys.stderr,
+            )
             return 1
         aliases.remember(answer, ids, kind, answer)
         # `cleared` is True here by construction -- the guard above returns
@@ -222,8 +234,11 @@ class _Recorder:
         try:
             written = sessions.record(session, r, now)
         except OSError as exc:
-            self._report(row, f"cannot write the session log: {exc}",
-                         "  this session was not recorded; its row follows")
+            self._report(
+                row,
+                f"cannot write the session log: {exc}",
+                "  this session was not recorded; its row follows",
+            )
             return
         self.in_hand = None
         # `written` is False for a replay deduplicated inside the window, which the
@@ -239,8 +254,11 @@ class _Recorder:
             # writing at once can collide on it; that costs the entry, not the watch.
             entry = queue.add(session.path, r.title or session.path)
         except OSError as exc:
-            self._report(row, f"cannot add to the review queue: {exc}",
-                         "  this session was recorded but not queued; its row follows")
+            self._report(
+                row,
+                f"cannot add to the review queue: {exc}",
+                "  this session was recorded but not queued; its row follows",
+            )
             return
         _log.event("queued", path=session.path, folder=entry["folder"], seen=entry["seen"])
 
@@ -257,8 +275,11 @@ class _Recorder:
         unsafe = [s for s in (self.in_hand, acc.take()) if s is not None]
         if not unsafe:
             return
-        print("scrobd watch is stopping on an error; these sessions were not recorded, "
-              "and their rows follow, unresolved", file=sys.stderr)
+        print(
+            "scrobd watch is stopping on an error; these sessions were not recorded, "
+            "and their rows follow, unresolved",
+            file=sys.stderr,
+        )
         for session in unsafe:
             print(json.dumps(sessions.row(session, UNKNOWN, now)), file=sys.stderr)
         self.in_hand = None
@@ -316,8 +337,9 @@ class _Interrupts:
         """Change nothing yet; installing is `__enter__`'s job."""
         self._requested = False
         self._waiting = False
-        self._previous: dict[signal.Signals,
-                             Callable[[int, FrameType | None], object] | int | None] = {}
+        self._previous: dict[
+            signal.Signals, Callable[[int, FrameType | None], object] | int | None
+        ] = {}
 
     def __enter__(self) -> Self:
         """Take the stop signals over, keeping whatever handled them before."""
@@ -325,8 +347,12 @@ class _Interrupts:
             self._previous[sig] = signal.signal(sig, self._on_signal)
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None,
-                 tb: TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         """Hand the signals back, so no other command inherits the watch's handling."""
         for sig, previous in self._previous.items():
             signal.signal(sig, previous)
@@ -349,7 +375,7 @@ class _Interrupts:
             event = None if self._requested else next(events, None)
             self._waiting = False
         except KeyboardInterrupt:
-            self._waiting = False   # already so if the handler raised; not if it came another way
+            self._waiting = False  # already so if the handler raised; not if it came another way
             self._requested = True  # however it arrived, the watch was told to stop
             return None
         return event
@@ -364,8 +390,10 @@ def _cmd_watch(socket_path: str | None) -> int:
     """Record every library file mpv plays, until mpv exits or a stop signal arrives."""
     socket_path = socket_path or _default_socket()
     if socket_path is None:
-        print("XDG_RUNTIME_DIR is unset, so there is no default mpv socket -- "
-              "pass --socket PATH", file=sys.stderr)
+        print(
+            "XDG_RUNTIME_DIR is unset, so there is no default mpv socket -- pass --socket PATH",
+            file=sys.stderr,
+        )
         return 1
     # Once per watch: one small file per mpv launched.
     library = config.library_roots()
@@ -373,14 +401,16 @@ def _cmd_watch(socket_path: str | None) -> int:
     # Never raises: a log it cannot read costs the copy, not this watch.
     traktlog.sync()
     if library is None:
-        print(f"no library is configured in {config.path()}, so every local file "
-              "is being recorded", file=sys.stderr)
+        print(
+            f"no library is configured in {config.path()}, so every local file is being recorded",
+            file=sys.stderr,
+        )
     mpv = MpvSocket(socket_path)
     try:
         mpv.connect()
     except MpvUnavailableError as exc:
-        mpv.close()     # the subscription can fail with the socket already open
-        print(exc, file=sys.stderr)     # it already names the likely cause
+        mpv.close()  # the subscription can fail with the socket already open
+        print(exc, file=sys.stderr)  # it already names the likely cause
         return 1
     acc = Accumulator()
     recorder = _Recorder(library)
@@ -395,8 +425,7 @@ def _cmd_watch(socket_path: str | None) -> int:
     return 1 if recorder.failed else 0
 
 
-def _follow(mpv: MpvSocket, acc: Accumulator, recorder: _Recorder,
-            interrupts: _Interrupts) -> None:
+def _follow(mpv: MpvSocket, acc: Accumulator, recorder: _Recorder, interrupts: _Interrupts) -> None:
     """Record a session for every file mpv plays, then the one open when the watch ends."""
     events = mpv.events()
     try:
@@ -450,8 +479,9 @@ def _cmd_compare(n: int | None) -> int:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="scrobd", description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        prog="scrobd", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     pr = sub.add_parser("resolve")
@@ -466,12 +496,17 @@ def _build_parser() -> argparse.ArgumentParser:
     pi.add_argument("--from-json", nargs=2, metavar=("SERIES", "MOVIES"), required=True)
 
     pc = sub.add_parser("compare")
-    pc.add_argument("window", nargs="?", type=int,
-                    help="rolling window from 2026-10-11, 1-based (default: the current one)")
+    pc.add_argument(
+        "window",
+        nargs="?",
+        type=int,
+        help="rolling window from 2026-10-11, 1-based (default: the current one)",
+    )
 
     pw = sub.add_parser("watch")
-    pw.add_argument("--socket", metavar="PATH",
-                    help="mpv's IPC socket (default: $XDG_RUNTIME_DIR/mpvsocket)")
+    pw.add_argument(
+        "--socket", metavar="PATH", help="mpv's IPC socket (default: $XDG_RUNTIME_DIR/mpvsocket)"
+    )
 
     return p
 

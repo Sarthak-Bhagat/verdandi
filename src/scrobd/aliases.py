@@ -39,7 +39,7 @@ def remember(folder: str, ids: Ids, kind: AliasKind, title: str) -> None:
     """Teach the table one folder's answer, atomically."""
     t = load()
     t[folder] = {"ids": ids, "kind": kind, "title": title}
-    write_atomic(_file(), t)    # atomic: the daemon may be reading
+    write_atomic(_file(), t)  # atomic: the daemon may be reading
 
 
 def _row(table: Mapping[str, object], part: str) -> tuple[Ids, AliasKind, str] | None:
@@ -72,14 +72,27 @@ def lookup(path: str) -> Resolution:
             continue
         ids, kind, title = entry
         if kind == "movie":
-            return Resolution(kind="movie", ids=ids, season=None,
-                              episode=None, absolute=None, title=title,
-                              confidence="high", source="alias")
+            return Resolution(
+                kind="movie",
+                ids=ids,
+                season=None,
+                episode=None,
+                absolute=None,
+                title=title,
+                confidence="high",
+                source="alias",
+            )
         se = SE_RE.search(stem)
         if not se:
             return UNKNOWN
-        return Resolution(kind="episode", ids=ids,
-                          season=int(se.group(1)), episode=int(se.group(2)),
-                          absolute=absolute_from(stem),
-                          title=title, confidence="high", source="alias")
+        return Resolution(
+            kind="episode",
+            ids=ids,
+            season=int(se.group(1)),
+            episode=int(se.group(2)),
+            absolute=absolute_from(stem),
+            title=title,
+            confidence="high",
+            source="alias",
+        )
     return UNKNOWN

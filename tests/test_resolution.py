@@ -9,8 +9,16 @@ from scrobd.resolution import UNKNOWN, Resolution
 
 
 def make(**kw):
-    base: dict[str, Any] = {"kind": "episode", "ids": {"tvdb": 1}, "season": 1, "episode": 1,
-            "absolute": None, "title": "X", "confidence": "exact", "source": "filename"}
+    base: dict[str, Any] = {
+        "kind": "episode",
+        "ids": {"tvdb": 1},
+        "season": 1,
+        "episode": 1,
+        "absolute": None,
+        "title": "X",
+        "confidence": "exact",
+        "source": "filename",
+    }
     base.update(kw)
     return Resolution(**base)
 

@@ -1,0 +1,4 @@
+# mpv/scrobd.lua is written with four spaces; stylua defaults to tabs.
+column_width = 100
+indent_type = "Spaces"
+indent_width = 4

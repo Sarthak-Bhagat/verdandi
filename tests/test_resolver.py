@@ -14,6 +14,7 @@ def test_tier0_wins_and_costs_no_io(monkeypatch):
     def explode(*_a, **_k):
         msg = "tier 1 must not run when the filename answers"
         raise AssertionError(msg)
+
     monkeypatch.setattr(index, "load", explode)
     r = resolver.resolve("Spooky in Love (2026) [tvdbid-466998] - S01E02 - Episode 2.mkv")
     assert r.source == "filename"
@@ -21,9 +22,19 @@ def test_tier0_wins_and_costs_no_io(monkeypatch):
 
 
 def test_falls_through_to_the_index():
-    index.save(index.build(
-        [{"id": 1, "title": "Untagged Show", "tvdbId": 555,
-          "path": "/m/TV_Shows/Untagged Show (2020)"}], []))
+    index.save(
+        index.build(
+            [
+                {
+                    "id": 1,
+                    "title": "Untagged Show",
+                    "tvdbId": 555,
+                    "path": "/m/TV_Shows/Untagged Show (2020)",
+                }
+            ],
+            [],
+        )
+    )
     r = resolver.resolve("/m/TV_Shows/Untagged Show (2020)/Season 01/ep - S01E03 - x.mkv")
     assert r.source == "index"
     assert r.ids == {"tvdb": 555}
@@ -31,13 +42,24 @@ def test_falls_through_to_the_index():
 
 def test_tier1_wins_and_never_consults_the_alias_table(monkeypatch):
     """The mirror of tier 0's guard: an index hit must not fall through to tier 2."""
-    index.save(index.build(
-        [{"id": 1, "title": "Untagged Show", "tvdbId": 555,
-          "path": "/m/TV_Shows/Untagged Show (2020)"}], []))
+    index.save(
+        index.build(
+            [
+                {
+                    "id": 1,
+                    "title": "Untagged Show",
+                    "tvdbId": 555,
+                    "path": "/m/TV_Shows/Untagged Show (2020)",
+                }
+            ],
+            [],
+        )
+    )
 
     def explode(*_a, **_k):
         msg = "tier 2 must not run when the index answers"
         raise AssertionError(msg)
+
     monkeypatch.setattr(aliases, "lookup", explode)
     r = resolver.resolve("/m/TV_Shows/Untagged Show (2020)/Season 01/ep - S01E03 - x.mkv")
     assert r.source == "index"

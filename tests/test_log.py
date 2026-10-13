@@ -71,9 +71,19 @@ def test_the_source_field_shows_which_tier_actually_answered():
 
 
 def test_a_tier1_hit_is_logged_as_the_index():
-    index.save(index.build(
-        [{"id": 1, "title": "Untagged Show", "tvdbId": 555,
-          "path": "/m/TV_Shows/Untagged Show (2020)"}], []))
+    index.save(
+        index.build(
+            [
+                {
+                    "id": 1,
+                    "title": "Untagged Show",
+                    "tvdbId": 555,
+                    "path": "/m/TV_Shows/Untagged Show (2020)",
+                }
+            ],
+            [],
+        )
+    )
     cli.main(["resolve", "/m/TV_Shows/Untagged Show (2020)/Season 01/ep - S01E03 - x.mkv"])
     e = _one("resolve")
     assert e["source"] == "index"
@@ -120,9 +130,14 @@ def test_an_answer_that_cleared_nothing_teaches_nothing_and_logs_nothing():
 
 def test_index_rebuilt_records_the_counts(tmp_path):
     s = tmp_path / "s.json"
-    s.write_text(json.dumps([
-        {"id": 1, "title": "A", "tvdbId": 1, "path": "/m/TV_Shows/A"},
-        {"id": 2, "title": "B", "tvdbId": 2, "path": "/m/TV_Shows/B"}]))
+    s.write_text(
+        json.dumps(
+            [
+                {"id": 1, "title": "A", "tvdbId": 1, "path": "/m/TV_Shows/A"},
+                {"id": 2, "title": "B", "tvdbId": 2, "path": "/m/TV_Shows/B"},
+            ]
+        )
+    )
     m = tmp_path / "m.json"
     m.write_text(json.dumps([{"id": 1, "title": "C", "imdbId": "tt1", "path": "/m/Films/C"}]))
     cli.main(["index", "--from-json", str(s), str(m)])
@@ -187,6 +202,7 @@ def test_suppressing_the_log_still_queues_the_file(monkeypatch):
 def test_an_unwritable_state_dir_does_not_break_a_resolve(monkeypatch, capsys):
     def boom():
         raise PermissionError(13, "read-only file system")
+
     monkeypatch.setattr(_log, "state_dir", boom)
     rc = cli.main(["resolve", TAGGED])
     assert rc == 0
@@ -196,6 +212,7 @@ def test_an_unwritable_state_dir_does_not_break_a_resolve(monkeypatch, capsys):
 def test_a_failed_log_does_not_stop_a_file_reaching_the_queue(monkeypatch):
     def boom():
         raise PermissionError(13, "read-only file system")
+
     monkeypatch.setattr(_log, "state_dir", boom)
     assert cli.main(["resolve", UNKNOWN]) == 1
     assert queue.count() == 1
@@ -204,12 +221,13 @@ def test_a_failed_log_does_not_stop_a_file_reaching_the_queue(monkeypatch):
 def test_a_full_disk_loses_the_line_not_the_run(monkeypatch, tmp_path):
     def boom(*_a, **_k):
         raise OSError(28, "No space left on device")
+
     # Scoped, not `monkeypatch.undo()`: that also undid the fixture's XDG
     # redirect, so the assertion below read the user's real log and passed only
     # while that log happened to hold no `resolve` line.
     with monkeypatch.context() as m:
         m.setattr(Path, "open", boom)
-        _log.event("resolve", path=TAGGED)      # must not raise
+        _log.event("resolve", path=TAGGED)  # must not raise
     assert _file().is_relative_to(tmp_path)
     assert _events("resolve") == []
 

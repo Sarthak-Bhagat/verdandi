@@ -65,5 +65,13 @@ def ids_from(value: object) -> Ids | None:
     return ids
 
 
-UNKNOWN = Resolution(kind="unknown", ids={}, season=None, episode=None,
-                     absolute=None, title="", confidence="none", source="filename")
+UNKNOWN = Resolution(
+    kind="unknown",
+    ids={},
+    season=None,
+    episode=None,
+    absolute=None,
+    title="",
+    confidence="none",
+    source="filename",
+)

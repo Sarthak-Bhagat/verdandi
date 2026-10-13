@@ -53,7 +53,13 @@ def test_a_successful_episode_scrobble_is_read_with_its_numbers():
     assert traktlog.sync() == 1
     (e,) = mirrored()
     assert (e["kind"], e["action"], e["title"], e["season"], e["episode"], e["progress"]) == (
-        "scrobbled", "stop", "Some Show", 2, 5, 93.5)
+        "scrobbled",
+        "stop",
+        "Some Show",
+        2,
+        5,
+        93.5,
+    )
     assert e["at"] == "2026-10-12T21:00:00Z"
 
 
@@ -69,10 +75,14 @@ def test_attempts_discards_and_retries_are_kept():
     write_log(
         line("2026-10-12 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
         line("2026-10-12 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
-        line("2026-10-12 21:05:00", "WARNING", "Scrobble unsuccessful. Will try again later."))
+        line("2026-10-12 21:05:00", "WARNING", "Scrobble unsuccessful. Will try again later."),
+    )
     traktlog.sync()
     assert [(e["kind"], e.get("title"), e.get("progress")) for e in mirrored()] == [
-        ("attempt", "Other Show", 91.2), ("discarded", None, None), ("deferred", None, None)]
+        ("attempt", "Other Show", 91.2),
+        ("discarded", None, None),
+        ("deferred", None, None),
+    ]
 
 
 def test_the_stock_debug_attempt_line_is_read():
@@ -83,20 +93,31 @@ def test_the_stock_debug_attempt_line_is_read():
 
 
 def test_no_other_debug_line_is_read_even_in_a_known_shape():
-    write_log(line("2026-10-12 21:00:00", "DEBUG", "Scrobble stop successful for X at 90.00%"),
-              line("2026-10-12 21:00:01", "DEBUG", "Scrobble unsuccessful. Discarding it."))
+    write_log(
+        line("2026-10-12 21:00:00", "DEBUG", "Scrobble stop successful for X at 90.00%"),
+        line("2026-10-12 21:00:01", "DEBUG", "Scrobble unsuccessful. Discarding it."),
+    )
     assert traktlog.sync() == 0
 
 
 def test_nothing_else_is_ever_copied():
     """A request dump carries the auth header. Only the four known shapes are read."""
     write_log(
-        line("2026-10-12 21:00:00", "DEBUG", "Request headers: {'Authorization': 'Bearer abc'}",
-             module="trakt_interface"),
-        line("2026-10-12 21:00:00", "INFO", "Scrobble stop successful for X at 90.00%",
-             module="trakt_interface"),
+        line(
+            "2026-10-12 21:00:00",
+            "DEBUG",
+            "Request headers: {'Authorization': 'Bearer abc'}",
+            module="trakt_interface",
+        ),
+        line(
+            "2026-10-12 21:00:00",
+            "INFO",
+            "Scrobble stop successful for X at 90.00%",
+            module="trakt_interface",
+        ),
         line("2026-10-12 21:00:00", "INFO", "Something else entirely"),
-        "a line in no format at all\n")
+        "a line in no format at all\n",
+    )
     assert traktlog.sync() == 0
     assert mirrored() == []
 
@@ -104,8 +125,10 @@ def test_nothing_else_is_ever_copied():
 def test_a_second_sync_copies_only_what_is_new():
     write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
     traktlog.sync()
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
-              stop("2026-10-13 21:00:00", "Some Show S02E06", 95.0))
+    write_log(
+        stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
+        stop("2026-10-13 21:00:00", "Some Show S02E06", 95.0),
+    )
     assert traktlog.sync() == 1
     assert [e["episode"] for e in mirrored()] == [5, 6]
 
@@ -124,15 +147,31 @@ def test_no_trakt_scrobbler_log_is_not_an_error():
 # --- comparing ---
 
 
-def scrobd_row(ended: str, title: str, se: tuple[int, int] | None, *, content: float,
-               max_pos: float | None = None) -> None:
+def scrobd_row(
+    ended: str,
+    title: str,
+    se: tuple[int, int] | None,
+    *,
+    content: float,
+    max_pos: float | None = None,
+) -> None:
     season, episode = se or (None, None)
     end, duration = traktlog.parse_local(ended), 1400.0
-    row = {"ts": ended.replace(" ", "T") + "Z", "path": f"/m/{title}.mkv", "started_at": end - 60,
-           "ended_at": end, "duration": duration, "first_pos": 0.0,
-           "max_pos": duration if max_pos is None else max_pos, "content_seconds": content,
-           "kind": "episode" if season else "movie", "ids": {"tvdb": 1}, "season": season,
-           "episode": episode, "title": title}
+    row = {
+        "ts": ended.replace(" ", "T") + "Z",
+        "path": f"/m/{title}.mkv",
+        "started_at": end - 60,
+        "ended_at": end,
+        "duration": duration,
+        "first_pos": 0.0,
+        "max_pos": duration if max_pos is None else max_pos,
+        "content_seconds": content,
+        "kind": "episode" if season else "movie",
+        "ids": {"tvdb": 1},
+        "season": season,
+        "episode": episode,
+        "title": title,
+    }
     with (state_dir() / "sessions.jsonl").open("a") as f:
         f.write(json.dumps(row) + "\n")
 
@@ -144,8 +183,10 @@ def compare(n: int = 1) -> traktlog.Comparison:
 
 def test_the_first_window_starts_on_the_day_content_was_first_recorded():
     start, end = traktlog.window(1)
-    assert (time.strftime("%F", time.localtime(start)), time.strftime("%F", time.localtime(end))) \
-        == ("2026-10-11", "2026-11-11")
+    assert (
+        time.strftime("%F", time.localtime(start)),
+        time.strftime("%F", time.localtime(end)),
+    ) == ("2026-10-11", "2026-11-11")
     assert time.strftime("%F", time.localtime(traktlog.window(3)[1])) == "2027-01-11"
 
 
@@ -168,7 +209,8 @@ def test_a_skip_to_the_end_is_explained_not_a_failure():
 def test_a_discarded_scrobble_explains_a_watch_only_scrobd_has():
     write_log(
         line("2026-10-12 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
-        line("2026-10-12 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."))
+        line("2026-10-12 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
+    )
     scrobd_row("2026-10-12 21:00:05", "Other Show (2019)", (8, 9), content=1300.0)
     c = compare()
     assert c.unexplained == []
@@ -176,8 +218,10 @@ def test_a_discarded_scrobble_explains_a_watch_only_scrobd_has():
 
 
 def test_a_repeat_inside_a_day_on_trakts_side_is_explained():
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
-              stop("2026-10-12 22:00:00", "Some Show S02E05", 95.0))
+    write_log(
+        stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
+        stop("2026-10-12 22:00:00", "Some Show S02E05", 95.0),
+    )
     scrobd_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
     c = compare()
     assert c.unexplained == []
@@ -189,7 +233,9 @@ def test_a_watch_only_one_side_has_and_nothing_explains_is_unexplained():
     scrobd_row("2026-10-13 21:00:05", "Third Show", (1, 1), content=1300.0)
     c = compare()
     assert sorted((x.side, x.title) for x in c.unexplained) == [
-        ("only scrobd", "Third Show"), ("only trakt-scrobbler", "Some Show")]
+        ("only scrobd", "Third Show"),
+        ("only trakt-scrobbler", "Some Show"),
+    ]
 
 
 def test_rows_from_before_content_was_recorded_are_not_compared():

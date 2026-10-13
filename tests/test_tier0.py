@@ -18,9 +18,11 @@ needs_corpus = pytest.mark.skipif(
 
 
 def test_standard_episode():
-    r = parse("/m/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/Season 01/"
-              "Spooky in Love (2026) [tvdbid-466998] - S01E02 - Episode 2 "
-              "[WEBDL-1080p] [Marco].mkv")
+    r = parse(
+        "/m/TV_Shows/Spooky in Love (2026) [tvdbid-466998]/Season 01/"
+        "Spooky in Love (2026) [tvdbid-466998] - S01E02 - Episode 2 "
+        "[WEBDL-1080p] [Marco].mkv"
+    )
     assert r.kind == "episode"
     assert r.ids == {"tvdb": 466998}
     assert (r.season, r.episode, r.absolute) == (1, 2, None)
@@ -29,8 +31,10 @@ def test_standard_episode():
 
 
 def test_anime_episode_keeps_absolute_number():
-    r = parse("Gintama - Mr. Ginpachi's Zany Class (2025) [tvdbid-465543] - S01E12 - 012 - "
-              "Old Times Talk [WEBRip-1080p] [Erai-raws].mkv")
+    r = parse(
+        "Gintama - Mr. Ginpachi's Zany Class (2025) [tvdbid-465543] - S01E12 - 012 - "
+        "Old Times Talk [WEBRip-1080p] [Erai-raws].mkv"
+    )
     assert (r.season, r.episode, r.absolute) == (1, 12, 12)
 
 
@@ -41,8 +45,10 @@ def test_specials_are_season_zero():
 
 
 def test_movie():
-    r = parse("/m/Movies/Suzume (2022) [imdbid-tt16428256]/"
-              "Suzume (2022) [imdbid-tt16428256] [Bluray-1080p].mkv")
+    r = parse(
+        "/m/Movies/Suzume (2022) [imdbid-tt16428256]/"
+        "Suzume (2022) [imdbid-tt16428256] [Bluray-1080p].mkv"
+    )
     assert r.kind == "movie"
     assert r.ids == {"imdb": "tt16428256"}
     assert (r.season, r.episode) == (None, None)
@@ -57,8 +63,10 @@ def test_id_is_read_from_the_folder_when_the_file_lacks_one():
 
 def test_flattened_trash_file_still_resolves():
     """Trash from mediactl drops the folder. The id must survive in the filename alone."""
-    r = parse("/m/TV_Shows/.Trash-1002/files/"
-              "Mushoku Tensei (2021) [tvdbid-361013] - S03E13 - 062 - The Diary [WEBDL-1080p].mkv")
+    r = parse(
+        "/m/TV_Shows/.Trash-1002/files/"
+        "Mushoku Tensei (2021) [tvdbid-361013] - S03E13 - 062 - The Diary [WEBDL-1080p].mkv"
+    )
     assert r.ids == {"tvdb": 361013}
     assert (r.season, r.episode, r.absolute) == (3, 13, 62)
 
@@ -87,9 +95,13 @@ def test_episode_numbers_without_an_id_is_not_a_partial_answer():
 # Both sit in folders the index claims, so tier 1 resolves them -- which is
 # precisely why tier 1 exists. Named here rather than tolerated by a threshold,
 # so a third unmanaged file fails this test and tells you the library drifted.
-KNOWN_UNTAGGED = {"output_2k.mkv",
-                  ("The Affair Was Just the Beginning (2026) - S01E01 - Cheater A "
-                   "[WEBDL-1080p][AAC 2.0][KO][h264]-DUSKLiGHT.mkv")}
+KNOWN_UNTAGGED = {
+    "output_2k.mkv",
+    (
+        "The Affair Was Just the Beginning (2026) - S01E01 - Cheater A "
+        "[WEBDL-1080p][AAC 2.0][KO][h264]-DUSKLiGHT.mkv"
+    ),
+}
 
 
 @needs_corpus
@@ -133,8 +145,9 @@ def test_the_first_id_tag_wins_not_the_last():
 
 def test_the_first_id_tag_in_the_folder_fallback_wins_too():
     """The series folder is the shallowest tagged ancestor, so the earliest match wins."""
-    r = parse("/m/TV_Shows/Show (2020) [tvdbid-111]/Season 01/Decoy [tvdbid-999]/"
-              "ep - S01E01 - t.mkv")
+    r = parse(
+        "/m/TV_Shows/Show (2020) [tvdbid-111]/Season 01/Decoy [tvdbid-999]/ep - S01E01 - t.mkv"
+    )
     assert r.ids == {"tvdb": 111}
 
 
@@ -157,6 +170,8 @@ def test_a_4k_resolution_is_not_an_absolute_number():
 
 def test_a_real_absolute_number_still_survives_a_quality_tag():
     """The heuristic must not cost the library its 33 genuine absolute numbers."""
-    r = parse("Nukitashi THE ANIMATION (2025) [tvdbid-445390] - S01E05 - 005 - "
-              "Anti-Copulation Front [WEBRip-1080p] [EMBER].mkv")
+    r = parse(
+        "Nukitashi THE ANIMATION (2025) [tvdbid-445390] - S01E05 - 005 - "
+        "Anti-Copulation Front [WEBRip-1080p] [EMBER].mkv"
+    )
     assert r.absolute == 5

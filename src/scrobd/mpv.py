@@ -51,7 +51,7 @@ def _decode(line: bytes) -> object:
     try:
         return json.loads(line.decode("utf-8", "replace"))
     except json.JSONDecodeError:
-        return None                                   # never let one bad line end the stream
+        return None  # never let one bad line end the stream
 
 
 def _parse(line: bytes) -> Change | None:
@@ -106,17 +106,23 @@ class MpvSocket:
             # one clause covers it. The message carries `exc` rather than
             # guessing which errno arrived.
             sock.close()
-            msg = (f"{self.path} exists but nothing listening ({exc}) -- a user script "
-                   f"may have taken --input-ipc-server; mpv-discord does this")
+            msg = (
+                f"{self.path} exists but nothing listening ({exc}) -- a user script "
+                f"may have taken --input-ipc-server; mpv-discord does this"
+            )
             raise MpvUnavailableError(msg) from exc
-        sock.settimeout(None)       # reads block; see __init__ for why
+        sock.settimeout(None)  # reads block; see __init__ for why
         self._sock = sock
         # One write, not one per property. A subscription half-sent because mpv
         # exited mid-loop would leave us observing some properties and not
         # others, and a session missing its positions is the silent
         # under-reporting this whole module is here to prevent.
-        self._send([{"command": ["observe_property", i, prop]}
-                    for i, prop in enumerate(WATCHED_PROPERTIES, start=1)])
+        self._send(
+            [
+                {"command": ["observe_property", i, prop]}
+                for i, prop in enumerate(WATCHED_PROPERTIES, start=1)
+            ]
+        )
 
     def _send(self, payloads: list[dict[str, object]]) -> None:
         """Write *payloads* to mpv as newline-delimited JSON, in one call."""
@@ -149,9 +155,9 @@ class MpvSocket:
             try:
                 chunk = sock.recv(4096)
             except OSError:
-                return                                # closed under us; keep what we have
+                return  # closed under us; keep what we have
             if not chunk:
-                return                                # mpv exited; drop any partial line
+                return  # mpv exited; drop any partial line
             buf += chunk
             while b"\n" in buf:
                 line, buf = buf.split(b"\n", 1)
@@ -170,7 +176,11 @@ class MpvSocket:
         self.connect()
         return self
 
-    def __exit__(self, exc_type: type[BaseException] | None, exc: BaseException | None,
-                 tb: TracebackType | None) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         """Close the socket, whatever happened inside the block."""
         self.close()

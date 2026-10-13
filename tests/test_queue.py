@@ -49,7 +49,7 @@ def test_survives_a_corrupt_file():
 
 
 def test_a_series_folder_starting_with_season_is_not_mistaken_for_one():
-    """"Season of the Witch (2011)" is a film. A startswith() check swallowed it."""
+    """A film, "Season of the Witch (2011)". A startswith() check swallowed it."""
     queue.add("/m/Movies/Season of the Witch (2011)/film.mkv", "Season of the Witch")
     assert queue.pending()[0]["folder"] == "Season of the Witch (2011)"
 
@@ -86,7 +86,8 @@ def test_a_queue_of_the_wrong_shape_still_accepts_a_new_entry():
 def test_a_malformed_entry_is_not_counted_and_does_not_break_the_listing():
     (state_dir() / "review.json").write_text(
         '{"Bad": "not an entry", '
-        '"Good": {"folder": "Good", "title": "G", "example": "/m/Good/x.mkv", "seen": 2}}')
+        '"Good": {"folder": "Good", "title": "G", "example": "/m/Good/x.mkv", "seen": 2}}'
+    )
     assert queue.count() == 1
     assert [e["folder"] for e in queue.pending()] == ["Good"]
 
@@ -108,6 +109,7 @@ def test_an_entry_with_a_field_of_the_wrong_type_is_not_counted():
     """`review` prints the folder and example; an entry that cannot be printed is not one."""
     (state_dir() / "review.json").write_text(
         '{"Odd": {"folder": "Odd", "title": 5, "example": "/m/Odd/x.mkv", "seen": 1}, '
-        '"Flag": {"folder": "Flag", "title": "F", "example": "/m/Flag/x.mkv", "seen": true}}')
+        '"Flag": {"folder": "Flag", "title": "F", "example": "/m/Flag/x.mkv", "seen": true}}'
+    )
     assert queue.count() == 0
     assert queue.pending() == []

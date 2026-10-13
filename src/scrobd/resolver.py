@@ -25,4 +25,4 @@ def resolve(path: str) -> Resolution:
     if r.is_actionable:
         return r
 
-    return UNKNOWN          # the caller queues it; nothing is guessed and nothing is lost
+    return UNKNOWN  # the caller queues it; nothing is guessed and nothing is lost

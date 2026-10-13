@@ -40,15 +40,20 @@ _RES_RE = re.compile(r"(\d{3,4})p\b", re.IGNORECASE)
 # whole 2000-2099 year window plus 2160 outright.
 _ABS_MAX = 1999
 
-_KEY = {"tvdbid": "tvdb", "tvdb": "tvdb",
-        "imdbid": "imdb", "imdb": "imdb",
-        "tmdbid": "tmdb", "tmdb": "tmdb"}
+_KEY = {
+    "tvdbid": "tvdb",
+    "tvdb": "tvdb",
+    "imdbid": "imdb",
+    "imdb": "imdb",
+    "tmdbid": "tmdb",
+    "tmdb": "tmdb",
+}
 
 
 def _ids(text: str) -> Ids:
     out: Ids = {}
     for label, value in _ID.findall(text):
-        if not value:                      # [imdb-] -- present but empty
+        if not value:  # [imdb-] -- present but empty
             continue
         key = _KEY[label.lower()]
         if key in out:
@@ -129,16 +134,28 @@ def parse(path: str) -> Resolution:
     se = SE_RE.search(stem)
     if se:
         if "tvdb" not in ids:
-            return UNKNOWN                 # episode numbers with no series id say nothing
+            return UNKNOWN  # episode numbers with no series id say nothing
         return Resolution(
-            kind="episode", ids=ids,
-            season=int(se.group(1)), episode=int(se.group(2)),
+            kind="episode",
+            ids=ids,
+            season=int(se.group(1)),
+            episode=int(se.group(2)),
             absolute=absolute_from(stem),
-            title=_title(stem), confidence="exact", source="filename")
+            title=_title(stem),
+            confidence="exact",
+            source="filename",
+        )
 
     if "imdb" in ids or "tmdb" in ids:
-        return Resolution(kind="movie", ids=ids, season=None, episode=None,
-                          absolute=None, title=_title(stem),
-                          confidence="exact", source="filename")
+        return Resolution(
+            kind="movie",
+            ids=ids,
+            season=None,
+            episode=None,
+            absolute=None,
+            title=_title(stem),
+            confidence="exact",
+            source="filename",
+        )
 
     return UNKNOWN
