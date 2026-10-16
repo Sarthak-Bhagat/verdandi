@@ -105,6 +105,11 @@ def _file() -> Path:
     return state_dir() / "sessions.jsonl"
 
 
+def log_path() -> Path:
+    """Return the session log's path. Public for `push`, which reads it from a cursor."""
+    return _file()
+
+
 def _raw() -> bytes:
     """Return the log's bytes, or nothing if no session has been recorded yet."""
     try:

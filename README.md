@@ -19,6 +19,27 @@ It was called scrobd until 2026-10-16. Two reasons for the change:
 On the first command after the rename, state under `scrobd` in the XDG config and state
 directories is moved to `verdandi`, once and without overwriting anything.
 
+## Pushing to urd
+
+Every session `verdandi watch` records is also sent to urd, if one is configured. Two files
+in `~/.config/verdandi/` set it up:
+
+```toml
+# config.toml
+server = "https://urd.example"
+```
+
+and `token`, holding the push token on one line, readable by you alone (`chmod 600`; a looser
+file is used with a warning). The token lives in its own file so the config can be shown
+without it, and verdandi never prints or logs it.
+
+A row is sent as soon as it is written, and the place in the log moves only when urd has
+answered for every line. If urd is unreachable when mpv closes, the watcher stays behind and
+retries for up to 12 hours, then gives up until the next watch. More than three unsent watches
+puts up one desktop notification. `verdandi push` sends whatever is still unsent, now.
+
+Without `server`, nothing is pushed and nothing else changes.
+
 ## Terms
 
 Mine, and free to use — MIT licensed, so do what you like with it.

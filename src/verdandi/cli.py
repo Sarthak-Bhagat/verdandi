@@ -7,6 +7,7 @@ verdandi index --from-json <series> <movies>  rebuild the local index
 verdandi watch [--socket PATH]                record a session per library file mpv plays
 verdandi compare [N]                          window N of the parallel run against trakt-scrobbler
 verdandi history [-n N]                       the last N sessions recorded, oldest first
+verdandi push                                 send every session the server has not acknowledged
 """
 
 import argparse
@@ -21,9 +22,10 @@ from pathlib import Path
 from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Self
 
-from . import _log, aliases, config, history, index, queue, sessions, traktlog
+from . import _log, aliases, config, history, index, push, queue, sessions, traktlog
 from ._migrate import adopt_old_name
 from .mpv import Change, MpvSocket, MpvUnavailableError
+from .paths import config_dir
 from .resolution import UNKNOWN, Ids, Resolution
 from .resolver import resolve as resolve_one
 from .session import Accumulator, Session
@@ -208,11 +210,17 @@ class _Recorder:
     configured, *library* is None and every file is. Since every mpv starts a
     watcher, a session outside the library -- YouTube, music, a clip -- is the
     ordinary case, not an error: it is neither written nor queued, only logged.
+
+    *on_written* is called after each row that reaches the session log -- not a
+    replay deduplicated away -- so the pusher can send it at once.
     """
 
-    def __init__(self, library: list[str] | None) -> None:
+    def __init__(
+        self, library: list[str] | None, on_written: Callable[[], None] | None = None
+    ) -> None:
         """Start with nothing in hand and nothing failed, recording only *library*."""
         self.library = library
+        self.on_written = on_written
         self.in_hand: Session | None = None
         self.failed = False
 
@@ -248,6 +256,8 @@ class _Recorder:
         # one `_log.event` stamps, on purpose: both mark this record, milliseconds
         # apart, and keeping the row's makes the log line the written row exactly.
         _log.event("session", **row, written=written)
+        if written and self.on_written is not None:
+            self.on_written()
         # Same rule as `_cmd_resolve`: `is_actionable`, not `confidence == "none"`.
         if r.is_actionable or not _worth_asking_about(session):
             return
@@ -398,7 +408,8 @@ def _cmd_watch(socket_path: str | None) -> int:
         )
         return 1
     # Once per watch: one small file per mpv launched.
-    library = config.library_roots()
+    settings = config.load()
+    library = settings.library
     # Top up the copy of trakt-scrobbler's record before its log rotates away.
     # Never raises: a log it cannot read costs the copy, not this watch.
     traktlog.sync()
@@ -415,7 +426,8 @@ def _cmd_watch(socket_path: str | None) -> int:
         print(exc, file=sys.stderr)  # it already names the likely cause
         return 1
     acc = Accumulator()
-    recorder = _Recorder(library)
+    pusher = _start_pusher(settings)
+    recorder = _Recorder(library, on_written=pusher.notify if pusher else None)
     with _Interrupts() as interrupts:
         try:
             _follow(mpv, acc, recorder, interrupts)
@@ -423,8 +435,37 @@ def _cmd_watch(socket_path: str | None) -> int:
             # Anything nothing else caught. It still ends the watch, with its
             # traceback, but not before every session in hand is on stderr.
             recorder.salvage(acc)
+            if pusher is not None:
+                pusher.close(_PUSH_GRACE_S)
             raise
+    # After the stop signals are handed back: a logout ends a lingering watcher
+    # at once, and what it was retrying goes with the next watch instead.
+    if pusher is not None and not pusher.close(_PUSH_GRACE_S):
+        push.linger(pusher.server, pusher.token)
     return 1 if recorder.failed else 0
+
+
+# How long a closing watch waits for the last push before lingering.
+_PUSH_GRACE_S = 15.0
+
+
+def _start_pusher(settings: config.Settings) -> push.Pusher | None:
+    """Start pushing to the configured server, or return None if there is nowhere to push."""
+    if settings.server is None:
+        return None
+    tok = push.token()
+    if tok is None:
+        print(
+            f"a server is configured but {config_dir() / 'token'} is missing or empty, "
+            "so nothing is pushed",
+            file=sys.stderr,
+        )
+        # Nobody reads the watcher's stderr unprompted; the backlog notice is the prompt.
+        push.notify_if_backlogged()
+        return None
+    pusher = push.Pusher(settings.server, tok)
+    pusher.start()
+    return pusher
 
 
 def _follow(mpv: MpvSocket, acc: Accumulator, recorder: _Recorder, interrupts: _Interrupts) -> None:
@@ -491,6 +532,30 @@ def _cmd_history(n: int) -> int:
     return 0
 
 
+def _cmd_push() -> int:
+    """Send every unacknowledged session now; exit 1 unless all were acknowledged."""
+    server, tok = config.server_url(), push.token()
+    if server is None or tok is None:
+        print(
+            "no server, or no token, is configured -- see `server` in "
+            f"{config.path()} and the token file beside it",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        n = push.push(server, tok)
+    except push.PushError as exc:
+        print(exc, file=sys.stderr)
+        left = push.unconfirmed()
+        if left is None:
+            print("the session log cannot be read, so what is left is not counted", file=sys.stderr)
+        else:
+            print(f"{left} session(s) still unconfirmed", file=sys.stderr)
+        return 1
+    print(f"pushed {n} session(s); none unconfirmed")
+    return 0
+
+
 def _positive(value: str) -> int:
     """Parse *value* as a whole number of one or more, for argparse to reject otherwise.
 
@@ -536,6 +601,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "-n", type=_positive, default=20, help="how many sessions to show (default: 20)"
     )
 
+    sub.add_parser("push")
+
     pw = sub.add_parser("watch")
     pw.add_argument(
         "--socket", metavar="PATH", help="mpv's IPC socket (default: $XDG_RUNTIME_DIR/mpvsocket)"
@@ -558,6 +625,7 @@ def main(argv: list[str] | None = None) -> int:
         "compare": lambda: _cmd_compare(a.window),
         "history": lambda: _cmd_history(a.n),
         "watch": lambda: _cmd_watch(a.socket),
+        "push": _cmd_push,
     }
     run = commands.get(a.cmd)
     return run() if run else 1

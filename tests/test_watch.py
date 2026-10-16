@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from verdandi import cli, queue, sessions
+from verdandi import cli, push, queue, sessions
 from verdandi.mpv import MpvSocket, MpvUnavailableError
 from verdandi.paths import config_dir, data_dir, state_dir
 
@@ -646,3 +646,143 @@ def test_a_watch_starting_copies_trakt_scrobblers_new_scrobbles(tmp_path):
     assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
     copied = (state_dir() / "trakt-scrobbler.jsonl").read_text().splitlines()
     assert [json.loads(x)["episode"] for x in copied] == [5]
+
+
+def push_to(url):
+    """Configure *url* as the server, with a token beside the config, as the owner's watch is."""
+    (config_dir() / "config.toml").write_text(f'library = ["/m"]\nserver = "{url}"\n')
+    token = config_dir() / "token"
+    token.write_text("test-token\n")
+    token.chmod(0o600)
+
+
+def test_each_written_session_reaches_the_server(tmp_path, server):
+    url, state = server
+    push_to(url)
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    sent = [json.loads(x) for batch in state["batches"] for x in batch]
+    assert [r["path"].endswith("S01E04 - t.mkv") for r in sent] == [True]
+    assert state["auth"][-1] == "Bearer test-token"
+
+
+def test_a_watch_with_no_server_configured_pushes_nothing_and_says_nothing_of_it(
+    tmp_path, server, capsys
+):
+    _url, state = server
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    assert state["batches"] == []
+    assert "token" not in capsys.readouterr().err
+
+
+def test_a_server_without_a_token_is_named_on_stderr_and_the_watch_still_records(
+    tmp_path, server, capsys
+):
+    url, state = server
+    push_to(url)
+    (config_dir() / "token").unlink()
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    assert state["batches"] == []
+    assert str(config_dir() / "token") in capsys.readouterr().err
+    assert len(sessions.read()) == 1
+
+
+def test_a_watch_that_could_not_deliver_lingers(tmp_path, server, monkeypatch):
+    url, state = server
+    state["mode"] = "fail"
+    push_to(url)
+    lingered = []
+    monkeypatch.setattr(push, "linger", lambda *args: lingered.append(args))
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    assert lingered == [(url, "test-token")]
+
+
+def test_a_watch_that_delivered_does_not_linger(tmp_path, server, monkeypatch):
+    url, _state = server
+    push_to(url)
+    lingered = []
+    monkeypatch.setattr(push, "linger", lambda *args: lingered.append(args))
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    assert lingered == []
+
+
+@pytest.fixture
+def fake_pusher(monkeypatch, server):
+    """Configure a server, and swap `push.Pusher` for a fake; return every fake made."""
+    url, _state = server
+    push_to(url)
+    made = []
+
+    class FakePusher:
+        """Counts what `watch` tells it, and sends nothing."""
+
+        def __init__(self, server, tok):
+            self.server, self.token = server, tok
+            self.notified = 0
+            self.closed = 0
+            made.append(self)
+
+        def start(self):
+            pass
+
+        def notify(self):
+            self.notified += 1
+
+        def close(self, _timeout):
+            self.closed += 1
+            return True
+
+    monkeypatch.setattr(push, "Pusher", FakePusher)
+    return made
+
+
+def test_the_pusher_is_told_once_per_written_row_and_not_for_a_duplicate(tmp_path, fake_pusher):
+    rc = run_watch(
+        tmp_path,
+        play(SHOW.format(4), 700.0) + play(SHOW.format(5), 300.0) + play(SHOW.format(4), 700.0),
+    )
+    assert rc == 0
+    # The second play of episode 4 reached no further, so it was not written.
+    assert [r["episode"] for r in sessions.read()] == [4, 5]
+    assert [p.notified for p in fake_pusher] == [2]
+
+
+def test_an_unforeseen_error_still_closes_the_pusher(tmp_path, fake_pusher):
+    (data_dir() / "aliases.json").write_bytes(b"\xff")
+    with pytest.raises(UnicodeDecodeError):
+        run_watch(tmp_path, play("/m/Mystery/Season 01/x.mkv", 60.0))
+    assert [p.closed for p in fake_pusher] == [1]
+
+
+def install_fake_notify_send(monkeypatch):
+    """Record every `notify-send` argv instead of putting anything on the desktop."""
+    sent = []
+    monkeypatch.setattr(push.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(push.subprocess, "run", lambda argv, **_kw: sent.append(argv))
+    return sent
+
+
+def test_a_server_without_a_token_notifies_once_of_a_backlog(tmp_path, server, monkeypatch):
+    url, _state = server
+    push_to(url)
+    (config_dir() / "token").unlink()
+    sent = install_fake_notify_send(monkeypatch)
+    sessions.log_path().write_text("".join(f'{{"n": {i}}}\n' for i in range(4)))
+    for n in (4, 5):  # two watches, each with its own mpv socket
+        (tmp_path / str(n)).mkdir()
+        assert run_watch(tmp_path / str(n), play(SHOW.format(n), 700.0)) == 0
+    headlines = [arg for argv in sent for arg in argv if arg.startswith("verdandi:")]
+    assert headlines == ["verdandi: 4 watches unsent"]
+
+
+@pytest.mark.filterwarnings("error::pytest.PytestUnhandledThreadExceptionWarning")
+def test_a_cursor_that_cannot_be_written_costs_the_push_not_the_watch(
+    tmp_path, server, monkeypatch
+):
+    url, _state = server
+    push_to(url)
+    (state_dir() / "push.cursor").mkdir()
+    lingered = []
+    monkeypatch.setattr(push, "linger", lambda *args: lingered.append(args))
+    assert run_watch(tmp_path, play(SHOW.format(4), 700.0)) == 0
+    assert len(sessions.read()) == 1
+    assert lingered == [(url, "test-token")]

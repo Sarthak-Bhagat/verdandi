@@ -1,11 +1,11 @@
-"""The CLI: resolve, review and index as run from a shell."""
+"""The CLI: resolve, review, index and push as run from a shell."""
 
 import json
 
 import pytest
 
-from verdandi import aliases, cli, queue
-from verdandi.paths import data_dir, state_dir
+from verdandi import aliases, cli, queue, sessions
+from verdandi.paths import config_dir, data_dir, state_dir
 from verdandi.resolution import Resolution
 
 
@@ -164,3 +164,41 @@ def test_any_command_first_adopts_the_old_scrobd_directories(tmp_path, monkeypat
     cli.main(["review"])
     assert (tmp_path / "state" / "verdandi" / "sessions.jsonl").read_text() == "row\n"
     assert not (tmp_path / "state" / "scrobd").exists()
+
+
+def configure_push(url):
+    (config_dir() / "config.toml").write_text(f'server = "{url}"\n')
+    token = config_dir() / "token"
+    token.write_text("test-token\n")
+    token.chmod(0o600)
+
+
+def test_push_without_a_server_says_so(capsys):
+    assert cli.main(["push"]) == 1
+    assert "no server" in capsys.readouterr().err
+
+
+def test_push_sends_the_backlog_and_says_how_many(server, capsys):
+    url, state = server
+    configure_push(url)
+    sessions.log_path().write_text('{"a": 1}\n{"b": 2}\n')
+    assert cli.main(["push"]) == 0
+    assert state["batches"] == [['{"a": 1}', '{"b": 2}']]
+    assert "pushed 2" in capsys.readouterr().out
+
+
+def test_push_that_is_not_acknowledged_exits_1_and_counts_what_is_left(server, capsys):
+    url, state = server
+    state["mode"] = "fail"
+    configure_push(url)
+    sessions.log_path().write_text('{"a": 1}\n{"b": 2}\n')
+    assert cli.main(["push"]) == 1
+    assert "2 session(s) still unconfirmed" in capsys.readouterr().err
+
+
+def test_push_with_a_session_log_it_cannot_read_exits_1_without_a_traceback(server, capsys):
+    url, _state = server
+    configure_push(url)
+    sessions.log_path().mkdir()
+    assert cli.main(["push"]) == 1
+    assert "session log" in capsys.readouterr().err

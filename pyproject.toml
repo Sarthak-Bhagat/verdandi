@@ -60,6 +60,18 @@ ignore = [
               # and shutil.which("mpv") -- an absolute path, so S607 never fires -- and
               # nothing in it is untrusted.
 ]
+"tests/test_push.py" = [
+  "S105",     # `TOKEN` is a made-up value sent to a fake server on 127.0.0.1 inside the
+              # test; it authenticates nothing. The rule cannot tell a fixture from a secret.
+]
+"src/verdandi/push.py" = [
+  "S310",     # the one Request is only ever for the configured server, and
+              # `config._server` refuses anything but an http(s) URL before it gets here.
+              # The opener that sends it has no file or ftp handler either, so `file:`
+              # and custom schemes -- what the rule guards against -- cannot be opened.
+  "S603",     # the one subprocess is `notify-send`: an absolute path from `shutil.which`
+              # and fixed arguments plus a count, with no shell and nothing untrusted.
+]
 "src/verdandi/cli.py" = [
   "T201",     # ruff's own docs for this rule: print "used to produce output as a part
               # of a command-line interface program are not typically a problem". The
