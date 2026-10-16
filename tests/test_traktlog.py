@@ -49,7 +49,7 @@ def mirrored() -> list[dict]:
 
 
 def test_a_successful_episode_scrobble_is_read_with_its_numbers():
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5))
     assert traktlog.sync() == 1
     (e,) = mirrored()
     assert (e["kind"], e["action"], e["title"], e["season"], e["episode"], e["progress"]) == (
@@ -60,11 +60,11 @@ def test_a_successful_episode_scrobble_is_read_with_its_numbers():
         5,
         93.5,
     )
-    assert e["at"] == "2026-10-12T21:00:00Z"
+    assert e["at"] == "2026-10-18T21:00:00Z"
 
 
 def test_a_film_has_no_episode_numbers():
-    write_log(stop("2026-10-12 21:00:00", "Some Film", 88.0))
+    write_log(stop("2026-10-18 21:00:00", "Some Film", 88.0))
     traktlog.sync()
     (e,) = mirrored()
     assert (e["title"], e["season"], e["episode"]) == ("Some Film", None, None)
@@ -73,9 +73,9 @@ def test_a_film_has_no_episode_numbers():
 def test_attempts_discards_and_retries_are_kept():
     """A discard names no title; the attempt logged just before it does."""
     write_log(
-        line("2026-10-12 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
-        line("2026-10-12 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
-        line("2026-10-12 21:05:00", "WARNING", "Scrobble unsuccessful. Will try again later."),
+        line("2026-10-18 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
+        line("2026-10-18 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
+        line("2026-10-18 21:05:00", "WARNING", "Scrobble unsuccessful. Will try again later."),
     )
     traktlog.sync()
     assert [(e["kind"], e.get("title"), e.get("progress")) for e in mirrored()] == [
@@ -87,15 +87,15 @@ def test_attempts_discards_and_retries_are_kept():
 
 def test_the_stock_debug_attempt_line_is_read():
     """Stock trakt-scrobbler logs the attempt at DEBUG; that one shape is read from DEBUG."""
-    write_log(line("2026-10-12 21:00:00", "DEBUG", "Scrobbling stop at 91.20% for Other Show"))
+    write_log(line("2026-10-18 21:00:00", "DEBUG", "Scrobbling stop at 91.20% for Other Show"))
     traktlog.sync()
     assert [(e["kind"], e["title"]) for e in mirrored()] == [("attempt", "Other Show")]
 
 
 def test_no_other_debug_line_is_read_even_in_a_known_shape():
     write_log(
-        line("2026-10-12 21:00:00", "DEBUG", "Scrobble stop successful for X at 90.00%"),
-        line("2026-10-12 21:00:01", "DEBUG", "Scrobble unsuccessful. Discarding it."),
+        line("2026-10-18 21:00:00", "DEBUG", "Scrobble stop successful for X at 90.00%"),
+        line("2026-10-18 21:00:01", "DEBUG", "Scrobble unsuccessful. Discarding it."),
     )
     assert traktlog.sync() == 0
 
@@ -104,18 +104,18 @@ def test_nothing_else_is_ever_copied():
     """A request dump carries the auth header. Only the four known shapes are read."""
     write_log(
         line(
-            "2026-10-12 21:00:00",
+            "2026-10-18 21:00:00",
             "DEBUG",
             "Request headers: {'Authorization': 'Bearer abc'}",
             module="trakt_interface",
         ),
         line(
-            "2026-10-12 21:00:00",
+            "2026-10-18 21:00:00",
             "INFO",
             "Scrobble stop successful for X at 90.00%",
             module="trakt_interface",
         ),
-        line("2026-10-12 21:00:00", "INFO", "Something else entirely"),
+        line("2026-10-18 21:00:00", "INFO", "Something else entirely"),
         "a line in no format at all\n",
     )
     assert traktlog.sync() == 0
@@ -123,19 +123,19 @@ def test_nothing_else_is_ever_copied():
 
 
 def test_a_second_sync_copies_only_what_is_new():
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5))
     traktlog.sync()
     write_log(
-        stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
-        stop("2026-10-13 21:00:00", "Some Show S02E06", 95.0),
+        stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5),
+        stop("2026-10-19 21:00:00", "Some Show S02E06", 95.0),
     )
     assert traktlog.sync() == 1
     assert [e["episode"] for e in mirrored()] == [5, 6]
 
 
 def test_rotated_files_are_read_oldest_first():
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5), name="trakt_scrobbler.log.1")
-    write_log(stop("2026-10-13 21:00:00", "Some Show S02E06", 95.0))
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5), name="trakt_scrobbler.log.1")
+    write_log(stop("2026-10-19 21:00:00", "Some Show S02E06", 95.0))
     traktlog.sync()
     assert [e["episode"] for e in mirrored()] == [5, 6]
 
@@ -181,26 +181,26 @@ def compare(n: int = 1) -> traktlog.Comparison:
     return traktlog.compare(n, sessions.read(), mirrored())
 
 
-def test_the_first_window_starts_on_the_day_content_was_first_recorded():
+def test_the_first_window_starts_on_the_first_day_both_scrobblers_could_see_mpv():
     start, end = traktlog.window(1)
     assert (
         time.strftime("%F", time.localtime(start)),
         time.strftime("%F", time.localtime(end)),
-    ) == ("2026-10-11", "2026-11-11")
-    assert time.strftime("%F", time.localtime(traktlog.window(3)[1])) == "2027-01-11"
+    ) == ("2026-10-17", "2026-11-17")
+    assert time.strftime("%F", time.localtime(traktlog.window(3)[1])) == "2027-01-17"
 
 
 def test_a_watch_both_recorded_matches():
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
-    verdandi_row("2026-10-12 21:00:05", "Some Show (2017)", (2, 5), content=1300.0)
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5))
+    verdandi_row("2026-10-18 21:00:05", "Some Show (2017)", (2, 5), content=1300.0)
     c = compare()
     assert (len(c.matched), c.unexplained) == (1, [])
 
 
 def test_a_skip_to_the_end_is_explained_not_a_failure():
     """trakt-scrobbler counts position; verdandi counts watching. The skip is the difference."""
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 99.0))
-    verdandi_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=200.0)
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 99.0))
+    verdandi_row("2026-10-18 21:00:05", "Some Show", (2, 5), content=200.0)
     c = compare()
     assert c.unexplained == []
     assert [x.reason for x in c.explained] == ["skipped: reached the end without watching it"]
@@ -208,10 +208,10 @@ def test_a_skip_to_the_end_is_explained_not_a_failure():
 
 def test_a_discarded_scrobble_explains_a_watch_only_verdandi_has():
     write_log(
-        line("2026-10-12 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
-        line("2026-10-12 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
+        line("2026-10-18 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
+        line("2026-10-18 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
     )
-    verdandi_row("2026-10-12 21:00:05", "Other Show (2019)", (8, 9), content=1300.0)
+    verdandi_row("2026-10-18 21:00:05", "Other Show (2019)", (8, 9), content=1300.0)
     c = compare()
     assert c.unexplained == []
     assert [x.reason for x in c.explained] == ["trakt-scrobbler discarded it"]
@@ -219,18 +219,18 @@ def test_a_discarded_scrobble_explains_a_watch_only_verdandi_has():
 
 def test_a_repeat_inside_a_day_on_trakts_side_is_explained():
     write_log(
-        stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
-        stop("2026-10-12 22:00:00", "Some Show S02E05", 95.0),
+        stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5),
+        stop("2026-10-18 22:00:00", "Some Show S02E05", 95.0),
     )
-    verdandi_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
+    verdandi_row("2026-10-18 21:00:05", "Some Show", (2, 5), content=1300.0)
     c = compare()
     assert c.unexplained == []
     assert [x.reason for x in c.explained] == ["trakt-scrobbler logged it twice inside a day"]
 
 
 def test_a_watch_only_one_side_has_and_nothing_explains_is_unexplained():
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
-    verdandi_row("2026-10-13 21:00:05", "Third Show", (1, 1), content=1300.0)
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5))
+    verdandi_row("2026-10-19 21:00:05", "Third Show", (1, 1), content=1300.0)
     c = compare()
     assert {(x.side, x.title) for x in c.unexplained} == {
         ("only verdandi", "Third Show"),
@@ -240,15 +240,15 @@ def test_a_watch_only_one_side_has_and_nothing_explains_is_unexplained():
 
 def test_rows_from_before_content_was_recorded_are_not_compared():
     """Rows without content_seconds cannot say whether a file was watched, so they sit out."""
-    write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
-    verdandi_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
+    write_log(stop("2026-10-18 21:00:00", "Some Show S02E05", 93.5))
+    verdandi_row("2026-10-18 21:00:05", "Some Show", (2, 5), content=1300.0)
     with (state_dir() / "sessions.jsonl").open("a") as f:
-        f.write(json.dumps({"ts": "2026-10-12T21:30:00Z", "ended_at": 1, "title": "Old"}) + "\n")
+        f.write(json.dumps({"ts": "2026-10-18T21:30:00Z", "ended_at": 1, "title": "Old"}) + "\n")
     assert compare().unexplained == []
 
 
 def test_watches_outside_the_window_are_left_out():
-    write_log(stop("2026-11-12 21:00:00", "Some Show S02E05", 93.5))
-    verdandi_row("2026-11-12 21:00:05", "Third Show", (1, 1), content=1300.0)
+    write_log(stop("2026-11-18 21:00:00", "Some Show S02E05", 93.5))
+    verdandi_row("2026-11-18 21:00:05", "Third Show", (1, 1), content=1300.0)
     assert compare(1).unexplained == []
     assert len(compare(2).unexplained) == 2

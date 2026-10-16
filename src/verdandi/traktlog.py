@@ -39,8 +39,11 @@ from .paths import state_dir
 
 _FILE = "trakt-scrobbler.jsonl"
 
-# The first day sessions carried `content_seconds`. Window 1 starts here.
-_FIRST_WINDOW = (2026, 10, 11)
+# Window 1 starts here: the first full day both scrobblers could see mpv. The run
+# opened on 2026-10-11, the day sessions first carried `content_seconds`, but
+# trakt-scrobbler had been blind to mpv's per-instance IPC socket since 2026-10-10,
+# so those five days compared nothing and the windows restart after the fix.
+_FIRST_WINDOW = (2026, 10, 17)
 
 # Trakt's rule, and verdandi's §7.3 rule: 80% or more is watched.
 _WATCHED = 0.80

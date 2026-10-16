@@ -132,8 +132,8 @@ def test_compare_prints_the_window_and_fails_on_an_unexplained_difference(capsys
     (state_dir() / "trakt-scrobbler.jsonl").write_text(
         json.dumps(
             {
-                "at": "2026-10-12T21:00:00Z",
-                "t": 1791838800.0,
+                "at": "2026-10-18T22:00:00Z",
+                "t": 1792357200.0,
                 "kind": "scrobbled",
                 "action": "stop",
                 "title": "Some Show",
@@ -146,7 +146,7 @@ def test_compare_prints_the_window_and_fails_on_an_unexplained_difference(capsys
     )
     assert cli.main(["compare", "1"]) == 1
     out = capsys.readouterr().out
-    assert "window 1: 2026-10-11 → 2026-11-10" in out
+    assert "window 1: 2026-10-17 → 2026-11-16" in out
     assert "only trakt-scrobbler" in out
     assert "Some Show S02E05" in out
 
