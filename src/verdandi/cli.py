@@ -6,6 +6,7 @@ verdandi review --answer <folder> --tvdb N    teach it, once, for the whole seri
 verdandi index --from-json <series> <movies>  rebuild the local index
 verdandi watch [--socket PATH]                record a session per library file mpv plays
 verdandi compare [N]                          window N of the parallel run against trakt-scrobbler
+verdandi history [-n N]                       the last N sessions recorded, oldest first
 """
 
 import argparse
@@ -20,7 +21,7 @@ from pathlib import Path
 from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Self
 
-from . import _log, aliases, config, index, queue, sessions, traktlog
+from . import _log, aliases, config, history, index, queue, sessions, traktlog
 from ._migrate import adopt_old_name
 from .mpv import Change, MpvSocket, MpvUnavailableError
 from .resolution import UNKNOWN, Ids, Resolution
@@ -479,6 +480,32 @@ def _cmd_compare(n: int | None) -> int:
     return 1 if c.unexplained else 0
 
 
+def _cmd_history(n: int) -> int:
+    """Print the last *n* recorded sessions, oldest first."""
+    shown = history.lines(sessions.read(), n)
+    if not shown:
+        print("no sessions recorded yet")
+        return 0
+    for line in shown:
+        print(line)
+    return 0
+
+
+def _positive(value: str) -> int:
+    """Parse *value* as a whole number of one or more, for argparse to reject otherwise.
+
+    The message is raised here, not left to argparse, which would name this function in it.
+    """
+    try:
+        n = int(value)
+    except ValueError:
+        n = 0
+    if n < 1:
+        msg = f"must be a whole number of 1 or more, not {value!r}"
+        raise argparse.ArgumentTypeError(msg)
+    return n
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="verdandi", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -504,6 +531,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="rolling window from 2026-10-11, 1-based (default: the current one)",
     )
 
+    ph = sub.add_parser("history")
+    ph.add_argument(
+        "-n", type=_positive, default=20, help="how many sessions to show (default: 20)"
+    )
+
     pw = sub.add_parser("watch")
     pw.add_argument(
         "--socket", metavar="PATH", help="mpv's IPC socket (default: $XDG_RUNTIME_DIR/mpvsocket)"
@@ -517,18 +549,18 @@ def main(argv: list[str] | None = None) -> int:
     a = _build_parser().parse_args(argv)
     adopt_old_name()
 
-    if a.cmd == "resolve":
-        return _cmd_resolve(a.path)
-    if a.cmd == "review":
-        return _cmd_review(a.answer, a.tvdb, a.imdb)
-    if a.cmd == "index":
-        s, m = a.from_json
-        return _cmd_index(s, m)
-    if a.cmd == "compare":
-        return _cmd_compare(a.window)
-    if a.cmd == "watch":
-        return _cmd_watch(a.socket)
-    return 1
+    # A table rather than an `if` per command: seven returns broke ruff's limit of
+    # six (PLR0911), and an unknown command still exits 1 rather than running one.
+    commands: dict[str, Callable[[], int]] = {
+        "resolve": lambda: _cmd_resolve(a.path),
+        "review": lambda: _cmd_review(a.answer, a.tvdb, a.imdb),
+        "index": lambda: _cmd_index(*a.from_json),
+        "compare": lambda: _cmd_compare(a.window),
+        "history": lambda: _cmd_history(a.n),
+        "watch": lambda: _cmd_watch(a.socket),
+    }
+    run = commands.get(a.cmd)
+    return run() if run else 1
 
 
 if __name__ == "__main__":
