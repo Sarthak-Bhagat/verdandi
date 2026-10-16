@@ -2,7 +2,7 @@
 
 import pytest
 
-from scrobd import aliases, index, resolver
+from verdandi import aliases, index, resolver
 
 
 @pytest.fixture(autouse=True)

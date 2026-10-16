@@ -1,13 +1,13 @@
-"""trakt-scrobbler's record, copied out of its log, and compared with scrobd's own.
+"""trakt-scrobbler's record, copied out of its log, and compared with verdandi's own.
 
-For the parallel run: scrobd is validated against the incumbent watching the
+For the parallel run: verdandi is validated against the incumbent watching the
 same mpv, three rolling months in a row with no difference nobody can explain.
 The Trakt API is closed to new free apps since mid-2026, so the incumbent's
 record is read from the log it already writes, not from Trakt.
 
 **Copy, because the log rotates.** trakt-scrobbler keeps 128 KiB x 6 files -- a
 few weeks at most -- and a monthly comparison needs the whole month. `sync`
-runs at the start of every `scrobd watch`, appends whatever is new, and costs
+runs at the start of every `verdandi watch`, appends whatever is new, and costs
 nothing on a day nothing was watched.
 
 **Four shapes, and nothing else, ever.** That log holds the Trakt token, in the
@@ -20,7 +20,7 @@ kept. The one DEBUG line read is the attempt -- `Scrobbling stop at 91.20% for
 
 **Watched means different things on each side, on purpose.** trakt-scrobbler
 reports *position*, and Trakt marks an episode watched at a `stop` of 80% or
-more. scrobd counts *content* -- media actually played. A skip to the credits is
+more. verdandi counts *content* -- media actually played. A skip to the credits is
 watched on one side and not the other, and `compare` names that as an
 explained difference rather than a failure.
 """
@@ -42,7 +42,7 @@ _FILE = "trakt-scrobbler.jsonl"
 # The first day sessions carried `content_seconds`. Window 1 starts here.
 _FIRST_WINDOW = (2026, 10, 11)
 
-# Trakt's rule, and scrobd's §7.3 rule: 80% or more is watched.
+# Trakt's rule, and verdandi's §7.3 rule: 80% or more is watched.
 _WATCHED = 0.80
 
 # A repeat of the same episode on trakt-scrobbler's side inside this long is
@@ -50,7 +50,7 @@ _WATCHED = 0.80
 # rewatches were one episode logged twice inside a day).
 _DUPLICATE_S = 24 * 3600
 
-# How far from a scrobd session a trakt-scrobbler attempt may be and still be
+# How far from a verdandi session a trakt-scrobbler attempt may be and still be
 # the same play. An attempt is logged when mpv stops, as the session ends.
 _SAME_PLAY_S = 3600
 
@@ -85,7 +85,7 @@ class Entry(TypedDict):
 
 
 def log_dir() -> Path:
-    """Return trakt-scrobbler's data directory. Never created: it is not scrobd's."""
+    """Return trakt-scrobbler's data directory. Never created: it is not verdandi's."""
     root = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     return Path(root) / "trakt-scrobbler"
 
@@ -232,7 +232,7 @@ def _norm(title: object) -> str:
 class Difference:
     """One watch only one side recorded."""
 
-    side: str  # "only scrobd" | "only trakt-scrobbler"
+    side: str  # "only verdandi" | "only trakt-scrobbler"
     title: str
     season: int | None
     episode: int | None
@@ -283,22 +283,22 @@ def _diff(side: str, row: JsonObject, at: float, reason: str | None = None) -> D
 def _trakt_reason(
     row: JsonObject,
     at: float,
-    scrobd_skips: list[JsonObject],
+    verdandi_skips: list[JsonObject],
     matched: list[tuple[JsonObject, JsonObject]],
 ) -> str | None:
     """Why a watch only trakt-scrobbler recorded is not a fault, if it is not."""
     ident = _ident(row)
     if any(_ident(t) == ident and 0 <= at - (_num(t, "t") or 0) < _DUPLICATE_S for t, _ in matched):
         return "trakt-scrobbler logged it twice inside a day"
-    for s in scrobd_skips:
+    for s in verdandi_skips:
         if _ident(s) == ident:
-            scrobd_skips.remove(s)
+            verdandi_skips.remove(s)
             return "skipped: reached the end without watching it"
     return None
 
 
-def _scrobd_reason(row: JsonObject, mirror: list[JsonObject]) -> str | None:
-    """Why a watch only scrobd recorded is not a fault, if it is not."""
+def _verdandi_reason(row: JsonObject, mirror: list[JsonObject]) -> str | None:
+    """Why a watch only verdandi recorded is not a fault, if it is not."""
     ended = _num(row, "ended_at") or 0.0
     for i, e in enumerate(mirror[:-1]):
         if (
@@ -315,7 +315,7 @@ def _scrobd_reason(row: JsonObject, mirror: list[JsonObject]) -> str | None:
 
 
 def compare(n: int, rows: list[JsonObject], mirror: list[JsonObject]) -> Comparison:
-    """Line up window *n* of scrobd's *rows* against trakt-scrobbler's *mirror*."""
+    """Line up window *n* of verdandi's *rows* against trakt-scrobbler's *mirror*."""
     start, end = window(n)
     out = Comparison(window=n)
 
@@ -358,6 +358,6 @@ def compare(n: int, rows: list[JsonObject], mirror: list[JsonObject]) -> Compari
     window_mirror = [e for e in mirror if inside(_num(e, "t"))]
     for r in watched:
         at = _num(r, "ended_at") or 0.0
-        reason = _scrobd_reason(r, window_mirror)
-        (out.explained if reason else out.unexplained).append(_diff("only scrobd", r, at, reason))
+        reason = _verdandi_reason(r, window_mirror)
+        (out.explained if reason else out.unexplained).append(_diff("only verdandi", r, at, reason))
     return out

@@ -1,4 +1,4 @@
-"""Copying trakt-scrobbler's scrobbles out of its rotating log, and comparing them with scrobd's."""
+"""Copying trakt-scrobbler's scrobbles out of its rotating log, and comparing them with ours."""
 
 import json
 import time
@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from scrobd import sessions, traktlog
-from scrobd.paths import state_dir
+from verdandi import sessions, traktlog
+from verdandi.paths import state_dir
 
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "s"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "d"))
-    monkeypatch.setenv("SCROBD_LOG", "0")
+    monkeypatch.setenv("VERDANDI_LOG", "0")
     # trakt-scrobbler stamps local time; pin it, so the conversion is the same everywhere.
     monkeypatch.setenv("TZ", "UTC")
     time.tzset()
@@ -147,7 +147,7 @@ def test_no_trakt_scrobbler_log_is_not_an_error():
 # --- comparing ---
 
 
-def scrobd_row(
+def verdandi_row(
     ended: str,
     title: str,
     se: tuple[int, int] | None,
@@ -192,26 +192,26 @@ def test_the_first_window_starts_on_the_day_content_was_first_recorded():
 
 def test_a_watch_both_recorded_matches():
     write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
-    scrobd_row("2026-10-12 21:00:05", "Some Show (2017)", (2, 5), content=1300.0)
+    verdandi_row("2026-10-12 21:00:05", "Some Show (2017)", (2, 5), content=1300.0)
     c = compare()
     assert (len(c.matched), c.unexplained) == (1, [])
 
 
 def test_a_skip_to_the_end_is_explained_not_a_failure():
-    """trakt-scrobbler counts position; scrobd counts watching. The skip is the difference."""
+    """trakt-scrobbler counts position; verdandi counts watching. The skip is the difference."""
     write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 99.0))
-    scrobd_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=200.0)
+    verdandi_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=200.0)
     c = compare()
     assert c.unexplained == []
     assert [x.reason for x in c.explained] == ["skipped: reached the end without watching it"]
 
 
-def test_a_discarded_scrobble_explains_a_watch_only_scrobd_has():
+def test_a_discarded_scrobble_explains_a_watch_only_verdandi_has():
     write_log(
         line("2026-10-12 21:00:00", "INFO", "Scrobbling stop at 91.20% for Other Show"),
         line("2026-10-12 21:00:01", "WARNING", "Scrobble unsuccessful. Discarding it."),
     )
-    scrobd_row("2026-10-12 21:00:05", "Other Show (2019)", (8, 9), content=1300.0)
+    verdandi_row("2026-10-12 21:00:05", "Other Show (2019)", (8, 9), content=1300.0)
     c = compare()
     assert c.unexplained == []
     assert [x.reason for x in c.explained] == ["trakt-scrobbler discarded it"]
@@ -222,7 +222,7 @@ def test_a_repeat_inside_a_day_on_trakts_side_is_explained():
         stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5),
         stop("2026-10-12 22:00:00", "Some Show S02E05", 95.0),
     )
-    scrobd_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
+    verdandi_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
     c = compare()
     assert c.unexplained == []
     assert [x.reason for x in c.explained] == ["trakt-scrobbler logged it twice inside a day"]
@@ -230,18 +230,18 @@ def test_a_repeat_inside_a_day_on_trakts_side_is_explained():
 
 def test_a_watch_only_one_side_has_and_nothing_explains_is_unexplained():
     write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
-    scrobd_row("2026-10-13 21:00:05", "Third Show", (1, 1), content=1300.0)
+    verdandi_row("2026-10-13 21:00:05", "Third Show", (1, 1), content=1300.0)
     c = compare()
-    assert sorted((x.side, x.title) for x in c.unexplained) == [
-        ("only scrobd", "Third Show"),
+    assert {(x.side, x.title) for x in c.unexplained} == {
+        ("only verdandi", "Third Show"),
         ("only trakt-scrobbler", "Some Show"),
-    ]
+    }
 
 
 def test_rows_from_before_content_was_recorded_are_not_compared():
     """Rows without content_seconds cannot say whether a file was watched, so they sit out."""
     write_log(stop("2026-10-12 21:00:00", "Some Show S02E05", 93.5))
-    scrobd_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
+    verdandi_row("2026-10-12 21:00:05", "Some Show", (2, 5), content=1300.0)
     with (state_dir() / "sessions.jsonl").open("a") as f:
         f.write(json.dumps({"ts": "2026-10-12T21:30:00Z", "ended_at": 1, "title": "Old"}) + "\n")
     assert compare().unexplained == []
@@ -249,6 +249,6 @@ def test_rows_from_before_content_was_recorded_are_not_compared():
 
 def test_watches_outside_the_window_are_left_out():
     write_log(stop("2026-11-12 21:00:00", "Some Show S02E05", 93.5))
-    scrobd_row("2026-11-12 21:00:05", "Third Show", (1, 1), content=1300.0)
+    verdandi_row("2026-11-12 21:00:05", "Third Show", (1, 1), content=1300.0)
     assert compare(1).unexplained == []
     assert len(compare(2).unexplained) == 2

@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from scrobd.resolution import UNKNOWN, Resolution
+from verdandi.resolution import UNKNOWN, Resolution
 
 
 def make(**kw):

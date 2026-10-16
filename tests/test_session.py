@@ -1,6 +1,6 @@
 """Turning a stream of mpv property changes into one record per file."""
 
-from scrobd.session import Accumulator, Session
+from verdandi.session import Accumulator, Session
 
 
 def feed(acc, events):

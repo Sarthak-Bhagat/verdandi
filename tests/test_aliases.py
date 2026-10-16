@@ -2,8 +2,8 @@
 
 import pytest
 
-from scrobd import aliases
-from scrobd.paths import data_dir
+from verdandi import aliases
+from verdandi.paths import data_dir
 
 
 @pytest.fixture(autouse=True)
@@ -47,7 +47,7 @@ def test_movie_alias():
 
 
 def test_persists_across_processes():
-    """The daemon and `scrobd review` are separate processes; disk is the only channel."""
+    """The daemon and `verdandi review` are separate processes; disk is the only channel."""
     aliases.remember("Persisted", {"tvdb": 7}, "episode", "P")
     assert aliases.lookup("/x/Persisted/Season 01/x - S01E01 - t.mkv").ids == {"tvdb": 7}
 

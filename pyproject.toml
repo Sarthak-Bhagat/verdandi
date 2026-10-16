@@ -1,5 +1,5 @@
 [project]
-name = "scrobd"
+name = "verdandi"
 version = "0.1.0"
 description = "Identity-first scrobbler for a *arr-managed library"
 requires-python = ">=3.11"
@@ -13,7 +13,7 @@ dev = [
 ]
 
 [project.scripts]
-scrobd = "scrobd.cli:main"
+verdandi = "verdandi.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -60,7 +60,7 @@ ignore = [
               # and shutil.which("mpv") -- an absolute path, so S607 never fires -- and
               # nothing in it is untrusted.
 ]
-"src/scrobd/cli.py" = [
+"src/verdandi/cli.py" = [
   "T201",     # ruff's own docs for this rule: print "used to produce output as a part
               # of a command-line interface program are not typically a problem". The
               # rule guards library code, where printing hides output from a caller.

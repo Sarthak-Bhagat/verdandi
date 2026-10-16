@@ -1,6 +1,6 @@
 """Answers you have already given, keyed on the folder.
 
-No in-process cache. `scrobd review` writes an alias in one process while the
+No in-process cache. `verdandi review` writes an alias in one process while the
 daemon runs in another; a cached table would leave the daemon blind to an answer
 you just gave until it restarted. Reading a few KB of JSON per played file costs
 nothing. It also means no `global` statement, which ruff rejects (PLW0603) and

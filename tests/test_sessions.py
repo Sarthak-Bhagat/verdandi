@@ -5,10 +5,10 @@ from dataclasses import replace
 
 import pytest
 
-from scrobd import sessions
-from scrobd.paths import state_dir
-from scrobd.resolution import UNKNOWN, Resolution
-from scrobd.session import Session
+from verdandi import sessions
+from verdandi.paths import state_dir
+from verdandi.resolution import UNKNOWN, Resolution
+from verdandi.session import Session
 
 
 @pytest.fixture(autouse=True)

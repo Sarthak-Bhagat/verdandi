@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from scrobd.mpv import MpvSocket, MpvUnavailableError
+from verdandi.mpv import MpvSocket, MpvUnavailableError
 
 
 def fake_mpv(path: Path, script: list[dict | str | bytes], ready: threading.Event):

@@ -44,7 +44,7 @@ def _decode(line: bytes) -> object:
     that ends the session before it -- at the cost of a U+FFFD per bad byte.
     Dropping the line instead would fold the next file's numbers into the
     previous session, and "surrogateescape" leaves lone surrogates that crash
-    `print` when `scrobd review` lists the path.
+    `print` when `verdandi review` lists the path.
     """
     if not line.strip():
         return None

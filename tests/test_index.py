@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scrobd import index
+from verdandi import index
 
 FIX = Path(__file__).parent / "fixtures"
 
@@ -64,8 +64,8 @@ def test_load_with_no_file_returns_empty(tmp_path, monkeypatch):
 def test_corrupt_index_does_not_raise(tmp_path, monkeypatch):
     """A half-written index must degrade to a cache miss, never crash the daemon."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    (tmp_path / "scrobd").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "scrobd" / "index.json").write_text("{not json")
+    (tmp_path / "verdandi").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "verdandi" / "index.json").write_text("{not json")
     assert index.load() == {"series": {}, "movies": {}}
 
 
@@ -103,8 +103,8 @@ def test_a_resolution_is_not_an_absolute_number(idx):
 def test_json_of_the_wrong_shape_degrades_to_empty(tmp_path, monkeypatch):
     """Valid JSON that is not a table is a cache miss, not a traceback."""
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
-    (tmp_path / "scrobd").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "scrobd" / "index.json").write_text("[]")
+    (tmp_path / "verdandi").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "verdandi" / "index.json").write_text("[]")
     assert index.load() == {"series": {}, "movies": {}}
 
 

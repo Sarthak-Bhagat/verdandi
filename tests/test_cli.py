@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from scrobd import aliases, cli, queue
-from scrobd.paths import data_dir, state_dir
-from scrobd.resolution import Resolution
+from verdandi import aliases, cli, queue
+from verdandi.paths import data_dir, state_dir
+from verdandi.resolution import Resolution
 
 
 @pytest.fixture(autouse=True)
@@ -154,3 +154,13 @@ def test_compare_prints_the_window_and_fails_on_an_unexplained_difference(capsys
 def test_compare_is_clean_with_nothing_to_compare(capsys):
     assert cli.main(["compare", "1"]) == 0
     assert "unexplained: 0" in capsys.readouterr().out
+
+
+def test_any_command_first_adopts_the_old_scrobd_directories(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    (tmp_path / "state" / "scrobd").mkdir(parents=True)
+    (tmp_path / "state" / "scrobd" / "sessions.jsonl").write_text("row\n")
+    cli.main(["review"])
+    assert (tmp_path / "state" / "verdandi" / "sessions.jsonl").read_text() == "row\n"
+    assert not (tmp_path / "state" / "scrobd").exists()

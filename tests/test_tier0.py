@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scrobd.tier0 import parse
+from verdandi.tier0 import parse
 
 # 222 filenames captured from the real library on 2026-09-20. It lives under docs/,
 # which is deliberately not committed -- it is a list of everything its owner watches.

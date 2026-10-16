@@ -1,11 +1,11 @@
-"""scrobd — identity-first scrobbling.
+"""verdandi — identity-first scrobbling.
 
-scrobd resolve <path>                       what is this file?
-scrobd review                               what could I not identify?
-scrobd review --answer <folder> --tvdb N    teach it, once, for the whole series
-scrobd index --from-json <series> <movies>  rebuild the local index
-scrobd watch [--socket PATH]                record a session per library file mpv plays
-scrobd compare [N]                          window N of the parallel run against trakt-scrobbler
+verdandi resolve <path>                       what is this file?
+verdandi review                               what could I not identify?
+verdandi review --answer <folder> --tvdb N    teach it, once, for the whole series
+verdandi index --from-json <series> <movies>  rebuild the local index
+verdandi watch [--socket PATH]                record a session per library file mpv plays
+verdandi compare [N]                          window N of the parallel run against trakt-scrobbler
 """
 
 import argparse
@@ -21,6 +21,7 @@ from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Self
 
 from . import _log, aliases, config, index, queue, sessions, traktlog
+from ._migrate import adopt_old_name
 from .mpv import Change, MpvSocket, MpvUnavailableError
 from .resolution import UNKNOWN, Ids, Resolution
 from .resolver import resolve as resolve_one
@@ -63,7 +64,7 @@ def _cmd_resolve(path: str) -> int:
         entry = queue.add(path, r.title or path)
         _log.event("queued", path=path, folder=entry["folder"], seen=entry["seen"])
         print(f"could not identify: {path}")
-        print("  queued for review -- run `scrobd review`")
+        print("  queued for review -- run `verdandi review`")
         return 1
     print(_describe(r))
     return 0
@@ -90,7 +91,7 @@ def _cmd_review(answer: str | None, tvdb: int | None, imdb: str | None) -> int:
         if not cleared:
             print(
                 f"nothing queued under {answer!r} -- folder names are matched "
-                "literally; `scrobd review` lists them",
+                "literally; `verdandi review` lists them",
                 file=sys.stderr,
             )
             return 1
@@ -110,7 +111,7 @@ def _cmd_review(answer: str | None, tvdb: int | None, imdb: str | None) -> int:
     for e in rows:
         print(f"  {e['seen']:>4} file(s)  {e['folder']}")
         print(f"              e.g. {e['example']}")
-    print("\n  answer with: scrobd review --answer '<folder>' --tvdb N")
+    print("\n  answer with: verdandi review --answer '<folder>' --tvdb N")
     return 0
 
 
@@ -267,7 +268,7 @@ class _Recorder:
 
         For an error nothing else caught, on its way out. The rows are left
         unresolved, identity unknown, because the error may have come from the
-        resolver itself; the path is in the row, and `scrobd resolve` will
+        resolver itself; the path is in the row, and `verdandi resolve` will
         answer it again.
         """
         now = time.time()
@@ -276,7 +277,7 @@ class _Recorder:
         if not unsafe:
             return
         print(
-            "scrobd watch is stopping on an error; these sessions were not recorded, "
+            "verdandi watch is stopping on an error; these sessions were not recorded, "
             "and their rows follow, unresolved",
             file=sys.stderr,
         )
@@ -296,7 +297,7 @@ class _Recorder:
 def _default_socket() -> str | None:
     """Return `$XDG_RUNTIME_DIR/mpvsocket`, or None if that directory is not set.
 
-    Read when the command runs, not at import, like every path in `scrobd.paths`.
+    Read when the command runs, not at import, like every path in `verdandi.paths`.
     The runtime directory is the user's own (0700), where mpv.conf's
     `input-ipc-server` points. There is deliberately no fallback to /tmp: a
     shared, world-writable path is one another user can bind first, and guessing
@@ -480,7 +481,7 @@ def _cmd_compare(n: int | None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="scrobd", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="verdandi", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -512,8 +513,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Run the scrobd CLI; return the process's exit code."""
+    """Run the verdandi CLI; return the process's exit code."""
     a = _build_parser().parse_args(argv)
+    adopt_old_name()
 
     if a.cmd == "resolve":
         return _cmd_resolve(a.path)

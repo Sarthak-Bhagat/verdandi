@@ -2,8 +2,8 @@
 
 import pytest
 
-from scrobd import queue
-from scrobd.paths import state_dir
+from verdandi import queue
+from verdandi.paths import state_dir
 
 
 @pytest.fixture(autouse=True)

@@ -1,9 +1,9 @@
-"""`library_roots`: the folders `scrobd watch` records, read from config.toml."""
+"""`library_roots`: the folders `verdandi watch` records, read from config.toml."""
 
 import pytest
 
-from scrobd import config
-from scrobd.paths import config_dir
+from verdandi import config
+from verdandi.paths import config_dir
 
 
 @pytest.fixture(autouse=True)

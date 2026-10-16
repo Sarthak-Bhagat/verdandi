@@ -1,6 +1,6 @@
-"""scrobd's config file, `config.toml` in the XDG config directory.
+"""verdandi's config file, `config.toml` in the XDG config directory.
 
-It holds one setting so far: the library, the folders `scrobd watch` records.
+It holds one setting so far: the library, the folders `verdandi watch` records.
 
 ```toml
 # Only files under these folders are watched -- the trakt-scrobbler whitelist model.
@@ -40,8 +40,8 @@ def path() -> Path:
 
 
 def _warn(message: str) -> None:
-    """Put one line on stderr: for `scrobd watch`, the `watch.stderr` the owner reads."""
-    sys.stderr.write(f"scrobd: {message}\n")
+    """Put one line on stderr: for `verdandi watch`, the `watch.stderr` the owner reads."""
+    sys.stderr.write(f"verdandi: {message}\n")
 
 
 def library_roots() -> list[str] | None:

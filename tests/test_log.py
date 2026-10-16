@@ -1,12 +1,12 @@
-"""The post-mortem log: one JSON line per decision, never fatal, off with SCROBD_LOG=0."""
+"""The post-mortem log: one JSON line per decision, never fatal, off with VERDANDI_LOG=0."""
 
 import json
 from pathlib import Path
 
 import pytest
 
-from scrobd import _log, cli, index, queue, resolver
-from scrobd.paths import state_dir
+from verdandi import _log, cli, index, queue, resolver
+from verdandi.paths import state_dir
 
 TAGGED = "Spooky in Love (2026) [tvdbid-466998] - S01E02 - Episode 2.mkv"
 UNKNOWN = "/m/Mystery Show/Season 01/x - S01E01 - t.mkv"
@@ -16,11 +16,11 @@ UNKNOWN = "/m/Mystery Show/Season 01/x - S01E01 - t.mkv"
 def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "d"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "s"))
-    monkeypatch.delenv("SCROBD_LOG", raising=False)
+    monkeypatch.delenv("VERDANDI_LOG", raising=False)
 
 
 def _file():
-    return state_dir() / "scrobd.jsonl"
+    return state_dir() / "verdandi.jsonl"
 
 
 def _lines():
@@ -157,7 +157,7 @@ def test_a_new_file_opens_with_a_dated_header():
     # Kept with no expiry, decided 2026-10-10: a header promising one would be a lie.
     assert "review_after" not in first
     assert "temporary" not in first
-    assert "SCROBD_LOG=0" in first["note"]
+    assert "VERDANDI_LOG=0" in first["note"]
 
 
 def test_the_header_is_written_once_not_per_append():
@@ -167,11 +167,11 @@ def test_the_header_is_written_once_not_per_append():
     assert len(_lines()) == 4
 
 
-# --- SCROBD_LOG ---
+# --- VERDANDI_LOG ---
 
 
-def test_scrobd_log_0_suppresses_everything(monkeypatch):
-    monkeypatch.setenv("SCROBD_LOG", "0")
+def test_verdandi_log_0_suppresses_everything(monkeypatch):
+    monkeypatch.setenv("VERDANDI_LOG", "0")
     cli.main(["resolve", TAGGED])
     cli.main(["resolve", UNKNOWN])
     cli.main(["review", "--answer", "Mystery Show", "--tvdb", "4242"])
@@ -179,19 +179,19 @@ def test_scrobd_log_0_suppresses_everything(monkeypatch):
 
 
 def test_logging_is_on_by_default(monkeypatch):
-    monkeypatch.delenv("SCROBD_LOG", raising=False)
+    monkeypatch.delenv("VERDANDI_LOG", raising=False)
     cli.main(["resolve", TAGGED])
     assert _file().exists()
 
 
 def test_only_the_exact_value_0_turns_it_off(monkeypatch):
-    monkeypatch.setenv("SCROBD_LOG", "1")
+    monkeypatch.setenv("VERDANDI_LOG", "1")
     cli.main(["resolve", TAGGED])
     assert len(_events("resolve")) == 1
 
 
 def test_suppressing_the_log_still_queues_the_file(monkeypatch):
-    monkeypatch.setenv("SCROBD_LOG", "0")
+    monkeypatch.setenv("VERDANDI_LOG", "0")
     assert cli.main(["resolve", UNKNOWN]) == 1
     assert queue.count() == 1
 
@@ -260,7 +260,7 @@ def test_the_file_stays_valid_jsonl_across_many_appends():
 def test_there_is_exactly_one_log_file_and_no_rotation():
     for i in range(50):
         cli.main(["resolve", f"/m/Tagged {i} [tvdbid-{2000 + i}] - S01E01 - t.mkv"])
-    assert [p.name for p in state_dir().glob("*.jsonl")] == ["scrobd.jsonl"]
+    assert [p.name for p in state_dir().glob("*.jsonl")] == ["verdandi.jsonl"]
 
 
 def test_a_newline_inside_a_path_does_not_split_the_line():
@@ -275,7 +275,7 @@ def test_a_large_log_warns_once_on_stderr(monkeypatch, capsys):
     for i in range(20):
         _log.event("resolve", path=f"/m/{i}.mkv")
     err = capsys.readouterr().err
-    assert err.count("SCROBD_LOG=0") == 1
+    assert err.count("VERDANDI_LOG=0") == 1
     assert "MB" in err
 
 

@@ -104,7 +104,7 @@ def count() -> int:
 def resolve_entry(folder: str) -> bool:
     """Remove *folder* from the queue; return whether a queued entry was actually removed.
 
-    The caller needs the answer. `scrobd review --answer "Mystery Show "` matched
+    The caller needs the answer. `verdandi review --answer "Mystery Show "` matched
     nothing on the trailing space and still reported success, leaving the entry
     queued forever and an alias under a key no lookup will ever produce. Keys are
     matched literally -- a typo is reported, never guessed at.

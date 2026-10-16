@@ -1,24 +1,24 @@
 """XDG directory resolution: env overrides, spec-default fallback, dir creation."""
 
-from scrobd import paths
+from verdandi import paths
 
 
 def test_honours_xdg_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
-    assert paths.config_dir() == tmp_path / "cfg" / "scrobd"
-    assert paths.data_dir() == tmp_path / "data" / "scrobd"
-    assert paths.state_dir() == tmp_path / "state" / "scrobd"
+    assert paths.config_dir() == tmp_path / "cfg" / "verdandi"
+    assert paths.data_dir() == tmp_path / "data" / "verdandi"
+    assert paths.state_dir() == tmp_path / "state" / "verdandi"
 
 
 def test_falls_back_to_spec_defaults(tmp_path, monkeypatch):
     for var in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
-    assert paths.config_dir() == tmp_path / ".config" / "scrobd"
-    assert paths.data_dir() == tmp_path / ".local" / "share" / "scrobd"
-    assert paths.state_dir() == tmp_path / ".local" / "state" / "scrobd"
+    assert paths.config_dir() == tmp_path / ".config" / "verdandi"
+    assert paths.data_dir() == tmp_path / ".local" / "share" / "verdandi"
+    assert paths.state_dir() == tmp_path / ".local" / "state" / "verdandi"
 
 
 def test_directories_are_created(tmp_path, monkeypatch):

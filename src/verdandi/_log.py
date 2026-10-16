@@ -1,10 +1,10 @@
-"""A post-mortem trail of what scrobd decided, one JSON object per line.
+"""A post-mortem trail of what verdandi decided, one JSON object per line.
 
 Added 2026-09-21 so that a wrong scrobble can be reconstructed afterwards
 rather than re-enacted. It was meant to run a week; on 2026-10-10 it was kept
 with no expiry, because its `out_of_scope` lines are the only trace of a file
 played outside the configured library -- a root the config misses shows up
-nowhere else. `SCROBD_LOG=0` turns it off with no code change.
+nowhere else. `VERDANDI_LOG=0` turns it off with no code change.
 
 **Decisions, never credentials.** Every field written here is something the tool
 worked out -- a path, a tier, a library id, a count. Nothing that authenticates
@@ -36,8 +36,8 @@ from pathlib import Path
 
 from .paths import state_dir
 
-_FILE = "scrobd.jsonl"
-_OFF = "SCROBD_LOG"  # "0" disables; anything else, including unset, leaves it on
+_FILE = "verdandi.jsonl"
+_OFF = "VERDANDI_LOG"  # "0" disables; anything else, including unset, leaves it on
 
 # The date the artefact carries about itself, so the file explains itself to
 # whoever finds it without this repo open.
@@ -74,8 +74,8 @@ def _header() -> dict[str, object]:
         "event": "log_started",
         "added": _ADDED,
         "note": (
-            f"post-mortem log of what scrobd decided, added {_ADDED}; kept with no "
-            "expiry. SCROBD_LOG=0 turns it off."
+            f"post-mortem log of what verdandi decided, added {_ADDED}; kept with no "
+            "expiry. VERDANDI_LOG=0 turns it off."
         ),
     }
 
@@ -91,8 +91,8 @@ def _warn_if_large(path: Path) -> None:
             return
         _warned.add(key)
         sys.stderr.write(
-            f"scrobd: {path} has reached {size / (1024 * 1024):.0f} MB -- move it aside "
-            f"to start a fresh one, or set SCROBD_LOG=0 to turn it off\n"
+            f"verdandi: {path} has reached {size / (1024 * 1024):.0f} MB -- move it aside "
+            f"to start a fresh one, or set VERDANDI_LOG=0 to turn it off\n"
         )
     except (OSError, ValueError):
         return  # a stat that fails or a closed stderr is not worth a traceback

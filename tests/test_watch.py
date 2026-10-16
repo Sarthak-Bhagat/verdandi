@@ -1,4 +1,4 @@
-"""`scrobd watch` end to end, against a fake mpv."""
+"""`verdandi watch` end to end, against a fake mpv."""
 
 import fcntl
 import json
@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from scrobd import cli, queue, sessions
-from scrobd.mpv import MpvSocket, MpvUnavailableError
-from scrobd.paths import config_dir, data_dir, state_dir
+from verdandi import cli, queue, sessions
+from verdandi.mpv import MpvSocket, MpvUnavailableError
+from verdandi.paths import config_dir, data_dir, state_dir
 
 
 def configure(*roots):
@@ -36,7 +36,7 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "d"))
     # Never the real config: the owner's library roots would decide what these tests record.
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "c"))
-    monkeypatch.setenv("SCROBD_LOG", "0")
+    monkeypatch.setenv("VERDANDI_LOG", "0")
     # Never the real one: a test that forgets --socket must not reach a running mpv.
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "run"))
     # Scoped, as the owner's watch is: every file these tests play is under /m.
@@ -247,7 +247,7 @@ def test_a_file_under_a_library_root_is_recorded(tmp_path, root):
 
 def logged_events(kind):
     """Return every post-mortem log line of event *kind*, in order."""
-    lines = (state_dir() / "scrobd.jsonl").read_text().splitlines()
+    lines = (state_dir() / "verdandi.jsonl").read_text().splitlines()
     return [e for e in map(json.loads, lines) if e["event"] == kind]
 
 
@@ -260,7 +260,7 @@ def test_a_file_outside_the_library_is_neither_recorded_nor_queued_but_logged(
     tmp_path, monkeypatch, path
 ):
     """Unidentifiable and played, so in the library it would be a row and a question."""
-    monkeypatch.setenv("SCROBD_LOG", "1")
+    monkeypatch.setenv("VERDANDI_LOG", "1")
     configure("/media/TV")
     rc = run_watch(
         tmp_path,
@@ -376,13 +376,15 @@ def test_mpv_gone_without_a_reason_is_recorded_as_lost(tmp_path):
 
 def test_every_session_is_logged_with_its_row_and_whether_it_was_written(tmp_path, monkeypatch):
     """A replay that adds no progress is deduplicated: logged, but not written."""
-    monkeypatch.setenv("SCROBD_LOG", "1")
+    monkeypatch.setenv("VERDANDI_LOG", "1")
     rc = run_watch(
         tmp_path,
         play(SHOW.format(1), 1300.0) + play(SHOW.format(2), 420.0) + play(SHOW.format(1), 600.0),
     )
     assert rc == 0
-    logged = [json.loads(line) for line in (state_dir() / "scrobd.jsonl").read_text().splitlines()]
+    logged = [
+        json.loads(line) for line in (state_dir() / "verdandi.jsonl").read_text().splitlines()
+    ]
     seen = [e for e in logged if e["event"] == "session"]
     assert [e["written"] for e in seen] == [True, True, False]
     rows = sessions.read()
@@ -605,7 +607,7 @@ def test_sigterm_ends_a_separate_watcher_asleep_in_a_real_read(tmp_path):
     with (
         srv,
         subprocess.Popen(
-            [sys.executable, "-m", "scrobd.cli", "watch", "--socket", "mpvsocket"],
+            [sys.executable, "-m", "verdandi.cli", "watch", "--socket", "mpvsocket"],
             cwd=tmp_path,
             stderr=subprocess.PIPE,
         ) as watcher,
